@@ -1,4 +1,4 @@
-# oracle-imagecopy-backup
+# unibet/oracle-imagecopy-backup
 
 Toolset for helping DBAs manage incrementally updated image copy backups of Oracle Databases. Includes automatic restore and verification tests.
 
@@ -23,7 +23,7 @@ Tested with:
 
 Requirements:
 
-* Python >= 2.6 and < 3
+* Python 2.6 or Python 2.7
 * Pyhton-Requests
 * Direct NFS in use for Oracle DB (optional, but highly recommended)
 * Storage for backups must support NFS, snapshots, cloning and optionally compression (deduplication)
@@ -46,7 +46,7 @@ Database needs to be bounced before Direct NFS is activated.
 
 Without Direct NFS, Oracle requires HARD mounted NFS mount points, or the following error will be returned: ORA-27054: NFS file system not mounted with correct options
 
-This means that if something happend with backup storage that is becomes unresponsive, OS kernel would not hang the IO database sends to the storage. So database can hang when archivelogs are stored in that mount point.
+This means that if something happens with backup storage that is becomes unresponsive, OS kernel would not hang the IO database sends to the storage. So database can hang when archivelogs are stored in that mount point.
 
 Direct NFS is only needed to allow backups and archivelogs to be stored in SOFT mounted NFS mount points. This means that IO to unresponsive NFS will not hang, the client will get an error instead.
 
@@ -54,16 +54,224 @@ Essential when Oracle ZFS Storage Appliance is used.
 
 ### Prepare Oracle ZFS Storage Appliance for receiving the backups
 
-These are recommendation that make backup and autorestore handling easier.
+Enable REST API
+
+Create project
+
+Create filesystem under the project **for each** database to be backed up. Filesystem name must be the same as db\_unique\_name value for that database.
+
+Mount all backup filesystems under common directory, for example under **/nfs/backup**
+Here is an example from /etc/fstab
+
+```
+zfssa.example.com:/export/demo-backup/orcl	/nfs/backup/orcl	nfs	rw,bg,soft,nointr,tcp,vers=3,timeo=600,rsize=32768,wsize=32768,actimeo=0	0 0
+```
+
+Prepare user in ZFSSA with the following privileges
+
+### Setting up the scripts
+
+I assume that you have already cloned the oracle-imagecopy-backup project git repository and I'll refer to the script directory as **$BACKUPSCRIPTS**.
+
+Highly recommended steps:
+
+* Fork the repository for your own use, so you could also version your database backup configurations (commit your configurations to git, excluding wallets).
+* Keep configurations from separate "environments" or clusters separate and symlink the correct configuration file in each environment (example is below).
+* If you use clustered environment, have only a single copy of $BACKUPSCRIPTS directory that is stored on a shared filesystem (NFS or ACFS) mounted on all nodes.
+
+Copy sample backup file to a new configuration and link it as a default configuration file (scripts search for file **backup.cfg**). Here I'm using backup.demo.cfg as new configuration file.
+
+```
+cd $BACKUPSCRIPTS
+cp backup.sample.cfg backup.demo.cfg
+ln -s backup.demo.cfg backup.cfg
+```
+
+Open backup.demo.cfg and look over the parameters specified there.
+You must check the following parameters:
+
+```
+[generic]
+# Root directory for backups, backups will be placed under $backupdest/db_unique_name
+backupdest: /nfs/backup
+# Directory where tnsnames.ora and sqlnet.ora are located in relation to the backup scripts directory
+tnsadmin: tns.sample
+# OS user that executes the backup
+osuser: oracle
+# Oracle home
+oraclehome: /u01/app/oracle/product/12.1.0.2/db
+```
+
+If you are using ZFS Storage Appliance to store the backups, then also change the following parameters:
+
+```
+[zfssa]
+# ZFSSA REST API URL
+url: https://zfssa.example.com:215
+# Disk pool and project where database backup filesystems are located
+pool: disk-pool1
+project: db-backup1
+```
+
+Also prepare file with ZFSSA login credentials
+
+```
+cd $BACKUPSCRIPTS
+cp zfscredentials.cfg.sample zfscredentials.cfg
+
+# Edit file zfscredentials.cfg and add there ZFSSA user credentials
+```
+
+Configure each database in backup.demo.cfg, at the end of the file add a section for each database.
+
+```
+# Section name has to be the same as db_unique_name parameter in the database
+[orcl]
+# Database ID: select to_char(dbid) from v$database
+dbid: 1433672784
+# How many days of archivelogs to keep on disk
+recoverywindow: 2
+# Backup parallelism (Enterprise Edition feature only)
+parallel: 4
+# How many days to keep daily backups
+snapexpirationdays: 31
+# How many months to keep one backup per month (the last backup created for each month)
+snapexpirationmonths: 6
+# Is RMAN catalog also in use
+registercatalog: false
+# Does this database also have a Data Guard standby (Enterprise Edition feature only)
+hasdataguard: false
+# DBMS_SCHEDULER calendar expressions when the backup jobs should run
+schedulebackup: FREQ=DAILY;BYHOUR=10;BYMINUTE=0
+schedulearchlog: FREQ=HOURLY;BYHOUR=21
+```
+
+Create wallet for storing database login credentials.
+
+```
+cd $BACKUPSCRIPTS
+
+# First create a directory for storing the wallet,
+# if directory name begins with "wallet", then it will be automatically excluded by .gitignore
+mkdir wallet.demo
+
+# Initialize wallet
+$ORACLE_HOME/bin/mkstore -wrl $BACKUPSCRIPTS/wallet.demo -create
+
+# For each database add its SYS credentials to the wallet
+$ORACLE_HOME/bin/mkstore -wrl $BACKUPSCRIPTS/wallet.demo -createCredential ORCL sys
+
+# If RMAN catalog is in use, then also add RMAN catalog credentials to the same wallet
+$ORACLE_HOME/bin/mkstore -wrl $BACKUPSCRIPTS/wallet.demo -createCredential RMAN rmancataloguser
+```
+
+Copy database connection information. This is just a custom **TNS_ADMIN** directory that contains **sqlnet.ora** (for wallet information) and **tnsnames.ora** (connection information for RMAN catalog and each database) files.
+
+```
+cd $BACKUPSCRIPTS
+
+# Create a separate directory for each configuration, also version this directory contents
+mkdir tns.demo
+
+# Copy same
+cp tns.sample/*.ora tns.demo/
+
+cd tns.demo
+
+# Check sqlnet.ora contents, make sure it points to the created wallet
+WALLET_LOCATION =
+  (SOURCE =
+   (METHOD = FILE)
+    (METHOD_DATA =
+     (DIRECTORY = /home/oracle/oracle-imagecopy-backup/wallet.demo)
+    )
+  )
+
+SQLNET.WALLET_OVERRIDE = TRUE
+
+# Add each database connection information to tnsnames.ora
+# Local TNS name must match database DB_UNIQUE_NAME
+# Use dedicated service name for taking backups, then in RAC you get automatic backup load balancing
+
+ORCL =
+  (DESCRIPTION=
+    (ADDRESS=
+      (PROTOCOL=TCP)
+      (HOST=localhost)
+      (PORT=1521)
+    )
+    (CONNECT_DATA=
+      (SERVICE_NAME=orcl_backup)
+    )
+  )
+```
+
+Test if wallet and TNS configuration is correctly set up:
+
+```
+export TNS_ADMIN=$BACKUPSCRIPTS/tns.demo
+
+# Try logging in using slqplus and rman to each database, using connection string /@db_unique_name
+$ORACLE_HOME/bin/sqlplus /@orcl as sysdba
+$ORACLE_HOME/bin/rman target /@orcl catalog /@rman
+```
+
+Run configuration for each database (orcl in this example). The config command will:
+
+* Configure RMAN backup location, parallel degree, controlfile autobackup location, snapshot controlfile location, backup optimization, recovery window and archivelog deletion policy
+* Place one additional OPTIONAL archivelog destination to backup filesystem
+* Configure Block Change Tracking (only when Enterprise Edition is in use)
+
+```
+backup.py orcl config
+```
+
+Run backup
+
+```
+backup.py orcl imagecopywithsnap
+```
 
 ### Scheduling backups
 
 Option 1
 
+Each database can schedule its own backup using DBMS\_SCHEDULER external jobs. This option is the easiest to set up.
+**schedulebackup** and **schedulearchlog** are DBMS\_SCHEDULER calendar expressions when the backup jobs should run. 
+
+To monitor backup job completion, then you just need to monitor the DBMS\_SCHEDULER job executions. If backup fails, then also the corresponding DBMS\_SCHEDULER job executions fails.
+
+To create the DBMS\_SCHEDULER jobs automatically for database **orcl** execute:
+
+```
+backup.py orcl setschedule
+```
+
 Option 2
 
-[Jenkins](https://jenkins.io/) is a popular continous integration and continous delivery tool that can be also used for scheduling tasks on remote servers over SSH. This solution will provide a good GUI overview of all database backups and also provides full backup log file through Jenkins GUI.
+[Jenkins](https://jenkins.io/) is a popular continous integration and continous delivery tool that can be also used for scheduling tasks on remote servers over SSH. This solution will provide a good GUI overview of all database backups, automatic emails when backup jobs fail and also provides full backup log file through Jenkins GUI.
 
-## Setting up automatic restore
+Execute the following SSH command from Jenkins in order to get the full backup log to Jenkins also:
 
-NBNB! It is VERY important to use a separate host tu run the autorestore tests that have no access to production database storage! Because it may be possible that Oracle tries to first overwrite or delete the necessary database files from their original locations! It is recommended to use a small server (small virtual machine) that only has access to backup storage over NFS.
+```
+BACKUP_LOG_TO_SCREEN=TRUE /path/to/scripts/backup.py orcl imagecopywithsnap
+```
+
+Option X
+
+There are plenty of other schedulers out there, but I'd just like to make a comment, that please avoid using crontab in clustered environment, then backups will keep running in case the server hosting the crontab scheduler fails :)
+
+## Setting up automatic restore tests
+
+NBNB! It is VERY important to use a separate host to run the autorestore tests that have no access to production database storage! Because it may be possible that Oracle tries to first overwrite or delete the necessary database files from their original locations! It is recommended to use a small server (small virtual machine) that only has access to backup storage over NFS.
+
+## Extending to other storage systems
+
+Create new python module to implement class **SnapHandler** from backupcommon.py. Change parameters **snappermodule** and **snapperclass** in backup.cfg to point to the new class.
+ZFSSA is implemented in module zfssa.py
+
+## Helper tools
+
+* zfssnapper.py - tool to run ZFSSA snapshot/clone operations from command line directly
+* exec_all.py
+* report.py
