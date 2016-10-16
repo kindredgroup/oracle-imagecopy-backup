@@ -1,4 +1,4 @@
-#!/usr/bin/python2.6
+#!/usr/bin/python2
 
 import sys
 from backupcommon import Configuration, create_snapshot_class

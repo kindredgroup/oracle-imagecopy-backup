@@ -1,4 +1,4 @@
-#!/usr/bin/python2.6
+#!/usr/bin/python2
 
 import os, ConfigParser, sys
 from datetime import datetime, timedelta

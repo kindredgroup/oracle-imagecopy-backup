@@ -23,7 +23,7 @@ Tested with:
 
 Requirements:
 
-* Python 2.6
+* Python >= 2.6 and < 3
 * Pyhton-Requests
 * Direct NFS in use for Oracle DB (optional, but highly recommended)
 * Storage for backups must support NFS, snapshots, cloning and optionally compression (deduplication)

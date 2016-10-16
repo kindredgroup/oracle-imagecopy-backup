@@ -1,4 +1,4 @@
-#!/usr/bin/python2.6
+#!/usr/bin/python2
 
 import os, sys, json
 from backupcommon import scriptpath, Configuration, BackupLogger, BackupTemplate, OracleExec, info, error, debug, exception, create_snapshot_class
