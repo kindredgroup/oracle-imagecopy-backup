@@ -1,0 +1,52 @@
+# RMAN catalog
+RMAN=
+  (DESCRIPTION=
+    (ADDRESS=
+      (PROTOCOL=TCP)
+      (HOST=dbhost.example.com)
+      (PORT=1521)
+    )
+    (CONNECT_DATA=
+      (SERVICE_NAME=rman.sample.example.com)
+    )
+  )
+
+AUTORESTORE =
+  (DESCRIPTION=
+    (ADDRESS=
+      (PROTOCOL=TCP)
+      (HOST=dbhost.example.com)
+      (PORT=1521)
+    )
+    (CONNECT_DATA=
+      (SERVICE_NAME=autorestorecatalog.sample.example.com)
+    )
+  )
+
+# Databases
+# Use a dedicated service for connecting! Then you get automatic load balancing between instances where the service is running
+# srvctl add service -database cdb1 -service backup_cdb1 -preferred cdb11,cdb12 -available cdb13
+
+CDB1 =
+  (DESCRIPTION=
+    (ADDRESS=
+      (PROTOCOL=TCP)
+      (HOST=dbhost.example.com)
+      (PORT=1521)
+    )
+    (CONNECT_DATA=
+      (SERVICE_NAME=backup_cdb1.sample.example.com)
+    )
+  )
+
+  OLDDB =
+    (DESCRIPTION=
+      (ADDRESS=
+        (PROTOCOL=TCP)
+        (HOST=dbhost.example.com)
+        (PORT=1521)
+      )
+      (CONNECT_DATA=
+        (SERVICE_NAME=backup_olddb.sample.example.com)
+      )
+    )

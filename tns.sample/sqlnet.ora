@@ -1,0 +1,9 @@
+WALLET_LOCATION =
+  (SOURCE =
+   (METHOD = FILE)
+    (METHOD_DATA =
+     (DIRECTORY = /home/oracle/oracle-imagecopy-backup/wallet.sample)
+    )
+  )
+
+SQLNET.WALLET_OVERRIDE = TRUE

@@ -1,0 +1,399 @@
+import os, logging, sys
+from tempfile import mkstemp, TemporaryFile
+from datetime import datetime, timedelta
+from time import sleep
+from subprocess import Popen, PIPE
+from abc import ABCMeta, abstractmethod
+from ConfigParser import SafeConfigParser
+from string import Template
+
+# Directory where the executable script is located
+def scriptpath():
+  scriptpath = os.path.dirname(os.path.realpath(__file__))
+  return scriptpath
+
+def getconfigname():
+  return Configuration.getconfigname()
+
+def info(msg):
+  if BackupLogger.log is not None:
+    BackupLogger.log.info(msg)
+
+def debug(msg):
+  if BackupLogger.log is not None:
+    BackupLogger.log.debug(msg)
+
+def error(msg):
+  if BackupLogger.log is not None:
+    BackupLogger.log.error(msg)
+
+def exception(msg):
+  if BackupLogger.log is not None:
+    BackupLogger.log.exception(msg)
+
+def size2str(size):
+  # Number of bytes to human readable string
+  sint = int(size)
+  if sint >= 1099511627776:
+    return "%dTB" % round(sint/1099511627776)
+  elif sint >= 1073741824:
+    return "%dGB" % round(sint/1073741824)
+  elif sint >= 1048576:
+    return "%dMB" % round(sint/1048576)
+  elif sint >= 1024:
+    return "%dkB" % round(sint/1024)
+  else:
+    return "%dB" % sint
+
+def create_snapshot_class(configsection):
+  snapclassname = Configuration.get('snapperclass', 'generic')
+  snapmod = __import__(Configuration.get('snappermodule', 'generic'), globals(), locals(), [snapclassname])
+  snapclass = getattr(snapmod, snapclassname)
+  return snapclass(configsection)
+
+class Configuration:
+  configfilename = None
+  _config = None
+  substitutions = {}
+  defaultsection = None
+  _defaults = {'registercatalog': 'false', 'hasdataguard': 'false',
+               'dosnapshot': 'true', 'gimanaged': 'true',
+               'schedulebackup': 'FREQ=DAILY', 'schedulearchlog': 'FREQ=HOURLY;INTERVAL=6',
+               'snapexpirationmonths': 0}
+
+  @classmethod
+  def getconfigname(cls):
+    configfile = ""
+    if os.getenv('BACKUPCONFIG'):
+      # Configuration file is supplied by environment variable
+      configfile = os.getenv('BACKUPCONFIG')
+    elif os.path.isfile(os.path.join(scriptpath(), 'backup.cfg')):
+      configfile = 'backup.cfg'
+    return configfile
+
+  @classmethod
+  def init(cls, defaultsection = None, additionaldefaults = None, configfilename = None):
+    if configfilename is None:
+      cls.configfilename = os.path.join(scriptpath(), getconfigname())
+    else:
+      cls.configfilename = os.path.join(scriptpath(), configfilename)
+    if not os.path.isfile(cls.configfilename):
+      raise Exception('configfilenotfound', "Configuration file %s not found" % cls.configfilename)
+    cls.defaultsection = defaultsection
+    if os.getenv('ORACLE_HOME'):
+      cls._defaults.update({'oraclehome': os.getenv('ORACLE_HOME')})
+    if additionaldefaults is not None:
+      cls._defaults.update(additionaldefaults)
+    cls._config = SafeConfigParser(cls._defaults)
+    cls._config.read(cls.configfilename)
+    if not os.getenv('BACKUPCONFIG'):
+      os.environ['BACKUPCONFIG'] = cls.configfilename
+
+  @classmethod
+  def sections(cls):
+    return cls._config.sections()
+
+  @classmethod
+  def get(cls, parameter, section=None):
+    if section is not None:
+      try:
+        return cls._config.get(cls.defaultsection, "%s%s" % (section, parameter))
+      except:
+        return cls._config.get(section, parameter)
+    else:
+      return cls._config.get(cls.defaultsection, parameter)
+
+  @classmethod
+  def get2(cls, parameter, section=None):
+    s = Template(cls.get(parameter, section))
+    return s.substitute(cls.substitutions)
+
+class BackupTemplate(object):
+
+  def __init__(self, filename):
+    self._configpath = os.path.join(scriptpath(), filename)
+    if not os.path.isfile(self._configpath):
+      raise Exception('templatefilenotfound', "Template file %s not found" % self._configpath)
+    self._config = SafeConfigParser()
+    self._config.read(self._configpath)
+
+  def get(self, entry):
+    s = Template(self._config.get('template', entry))
+    return s.substitute(Configuration.substitutions)
+
+class BackupLogger:
+  log = None
+  logfile = None
+  _logdir = None
+  config = None
+  _cleaned = False
+
+  @classmethod
+  def init(cls, logfile=None, config=None):
+    # Initialize/reinitialize all loggers
+    if config is not None:
+      cls.config = config
+      if cls.log is not None:
+        cls.close(True)
+        del cls.log
+        cls.log = None
+    if logfile is not None:
+      cls.logfile = logfile
+      cls._logdir = os.path.dirname(cls.logfile)
+      if not os.path.exists(cls._logdir):
+        os.makedirs(cls._logdir)
+    if cls.log is None:
+      cls.log = logging.getLogger(config)
+      cls.log.setLevel(logging.DEBUG)
+      streamformatter = logging.Formatter('%(asctime)s %(levelname)-8s %(name)-15s %(message)s', '%H:%M:%S')
+      mystream = logging.StreamHandler(sys.stdout)
+      mystream.setFormatter(streamformatter)
+      mystream.setLevel(logging.INFO)
+      cls.log.addHandler(mystream)
+    myformatter = logging.Formatter('%(asctime)s %(levelname)-8s %(name)-15s %(message)s')
+    myhandler = logging.FileHandler(cls.logfile)
+    myhandler.setFormatter(myformatter)
+    cls.log.addHandler(myhandler)
+
+  @classmethod
+  def close(cls, closeall=False):
+    # This just closes the FileHandlers so we could write to the log file from rman/sqlplus directly
+    handlers = cls.log.handlers[:]
+    for handler in handlers:
+      if closeall or handler.__class__ is logging.FileHandler:
+        handler.flush()
+        handler.close()
+        cls.log.removeHandler(handler)
+
+  @classmethod
+  def clean(cls):
+    if not cls._cleaned:
+      retentiondays = int(Configuration.get('logretention', 'generic'))
+      # Clear old logfiles
+      for fname in os.listdir(cls._logdir):
+        if fname[-4:] == ".log":
+          fullpath = os.path.join(cls._logdir, fname)
+          if os.path.isfile(fullpath) and ( datetime.now() - datetime.fromtimestamp(os.path.getmtime(fullpath)) > timedelta(days=retentiondays) ):
+            if cls.log is not None:
+              cls.log.debug("Removing log: %s" % fullpath)
+            os.remove(fullpath)
+      cls._cleaned = True
+
+class BackupLock(object):
+
+  def _createlock(self):
+    if not os.path.exists(self._lockfile):
+      try:
+        os.link(self._tmplockfile, self._lockfile)
+        return True
+      except:
+        info("Getting lock %s failed!" % self._lockfile)
+        return False
+    else:
+      info("Locked! File %s exists." % self._lockfile)
+      return False
+
+  def __init__(self, lockdir, maxlockwait=30):
+    self._lockfile = os.path.join(lockdir, 'backup.lck')
+    tmpf,self._tmplockfile = mkstemp(suffix='.lck', dir=lockdir)
+    # Add here some more useful information about the locker
+    os.write(tmpf, "%s\n%s\n%d" % (os.uname(), datetime.now().strftime('%Y-%m-%d %H:%M:%S'), os.getpid()) )
+    os.close(tmpf)
+    # Try getting a lock
+    lockstart = datetime.now()
+    locksuccess = False
+    while (datetime.now() - lockstart < timedelta(minutes=maxlockwait)):
+      if self._createlock():
+        locksuccess = True
+        break
+      else:
+        sleep(5)
+    if not locksuccess:
+      error("Did not manage to get the lock in time.")
+      sys.exit(2)
+
+  def release(self):
+    if os.path.exists(self._lockfile):
+      os.remove(self._lockfile)
+    if os.path.exists(self._tmplockfile):
+      os.remove(self._tmplockfile)
+
+class OracleExec:
+  oraclehome = None
+  tnspath = None
+
+  @classmethod
+  def init(cls, oraclehome):
+    cls.oraclehome = oraclehome
+    debug("Oracle home: %s" % cls.oraclehome)
+    if os.environ.get('ORACLE_SID'):
+      del os.environ['ORACLE_SID']
+    os.environ['ORACLE_HOME'] = cls.oraclehome
+    os.environ['NLS_DATE_FORMAT'] = 'yyyy-mm-dd hh24:mi:ss'
+    cls.tnspath = os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic'))
+    os.environ['TNS_ADMIN'] = cls.tnspath
+
+  @classmethod
+  def rman(cls, finalscript):
+    debug("RMAN execution starts")
+    BackupLogger.close()
+    starttime = datetime.now()
+    with TemporaryFile() as f:
+      p = Popen([os.path.join(cls.oraclehome, 'bin', 'rman'), "log", BackupLogger.logfile, "append"], stdout=f, stderr=f, stdin=PIPE)
+      # Send the script to RMAN
+      p.communicate(input=finalscript)
+    endtime = datetime.now()
+    BackupLogger.init()
+    debug("RMAN execution time %s" % (endtime-starttime))
+    # If RMAN exists with any code except 0, then there was some error
+    if p.returncode != 0:
+      error("RMAN execution failed with code %d" % p.returncode)
+      raise Exception('rman', "RMAN exited with code %d" % p.returncode)
+    else:
+      debug("RMAN execution successful")
+
+  @classmethod
+  def sqlplus(cls, finalscript, silent=False):
+    with TemporaryFile() as f:
+      args = [os.path.join(cls.oraclehome, 'bin', 'sqlplus')]
+      if silent:
+        args.append('-S')
+      args.append('/nolog')
+      debug("SQL*Plus execution starts")
+      BackupLogger.close()
+      p = Popen(args, stdout=f, stderr=f, stdin=PIPE)
+      p.communicate(input=finalscript)
+      BackupLogger.init()
+      if p.returncode != 0:
+        error("SQL*Plus exited with code %d" % p.returncode)
+        raise Exception('sqlplus', "sqlplus exited with code %d" % p.returncode)
+      else:
+        debug("SQL*Plus execution successful")
+      if silent:
+        f.seek(0,0)
+        return f.read()
+
+  @classmethod
+  def sqlldr(cls, login, finalscript):
+    debug("SQLLDR execution starts")
+    f1 = mkstemp(suffix=".ctl")
+    ftmp = os.fdopen(f1[0], "w")
+    ftmp.write(finalscript)
+    ftmp.close()
+    f2 = mkstemp(suffix=".log")
+    os.close(f2[0])
+    with TemporaryFile() as f:
+      # Added direct=true to work around sqlld hang after upgrading to 12c PDB
+      p = Popen([os.path.join(cls.oraclehome, 'bin', 'sqlldr'), login, "control=%s" % f1[1], "log=%s" % f2[1], "errors=0", "silent=all"], stdout=f, stderr=None, stdin=None)
+      p.communicate()
+      if p.returncode != 0:
+        error("SQLLDR exited with code %d" % p.returncode)
+        raise Exception('sqlldr', "sqlldr exited with code %d" % p.returncode)
+      else:
+        debug("SQLLDR execution successful")
+    os.unlink(f1[1])
+    os.unlink(f2[1])
+
+class SnapHandler(object):
+  __metaclass__ = ABCMeta
+  configname = None
+
+  @abstractmethod
+  def __init__(self, configname):
+    self.configname = configname
+
+  @abstractmethod
+  def listsnapshots(self, sortbycreation=False, sortreverse=False):
+    pass
+
+  @abstractmethod
+  def snap(self):
+    # Must return snapshot ID
+    pass
+
+  @abstractmethod
+  def dropsnap(self, snapid):
+    pass
+
+  @abstractmethod
+  def getsnapinfo(self, snapstruct):
+    # s is element in list that listsnapshots returns
+    # Must return dict with elements id (string), creation (with type datetime in UTC), numclones (int), space_total (int in bytes), space_unique (int in bytes)
+    pass
+
+  def snap2str(self, s):
+    # Convert the snap information to one nice string value
+    # Input must come from getsnapinfo
+    return "%s [%s UTC] total=%s unique=%s clones=%s" % (s["id"], s["creation"], size2str(s["space_total"]), size2str(s["space_unique"]), s["numclones"])
+
+  def clone2str(self, s):
+    # Convert clone information to a nice string value
+    return "%s [%s] [mount point: %s]" % (s["clonename"], s["origin"], s["mountpoint"])
+
+  @abstractmethod
+  def clone(self, snapid, clonename):
+    pass
+
+  @abstractmethod
+  def dropclone(self, cloneid):
+    pass
+
+  def clean(self):
+    max_age_days = int(Configuration.get('snapexpirationdays'))
+    max_age_months = int(Configuration.get('snapexpirationmonths'))
+    sorted_snaps = self.listsnapshots(sortbycreation=True)
+    output = []
+    number_of_snaps = len(sorted_snaps)
+    for idx, snapstruct in enumerate(sorted_snaps):
+      s = self.getsnapinfo(snapstruct)
+      d = s["creation"]
+      age = datetime.utcnow() - d
+      status = "valid"
+      drop_allowed = False
+      dropped = False
+      # Check snap expiration
+      if age > timedelta(days=max_age_days):
+        if age > timedelta(days=max_age_months*31):
+          # Drop is allowed if monthly expiration has also passed
+          drop_allowed = True
+        else:
+          if idx+1 < number_of_snaps:
+            # The last snap of each month is retained
+            previnfo = self.getsnapinfo(sorted_snaps[idx+1])
+            drop_allowed = str(s["creation"])[0:7] == str(previnfo["creation"])[0:7]
+      if drop_allowed and s["numclones"] != 0:
+        status = "has a clone"
+        drop_allowed = False
+      # Do the actual drop
+      if drop_allowed:
+        try:
+          self.dropsnap(s["id"])
+          dropped = True
+          status = "dropped"
+        except:
+          status = "DROP FAILED"
+      yield {'snapid': s["id"], 'dropped': dropped, 'status': status, 'infostring': "%s %s" % (self.snap2str(s), status)}
+
+  def autoclone(self):
+    # Returns source snap id
+    maxsnapage = timedelta(hours = int(Configuration.get('autorestoresnapage', 'autorestore')), minutes=0 )
+    # Find the snap for cloning
+    sorted_snaps = self.listsnapshots(sortbycreation=True, sortreverse=True)
+    sourcesnap = None
+    for idx, snaprecord in enumerate(sorted_snaps):
+      s = self.getsnapinfo(snaprecord)
+      d = s["creation"]
+      age = datetime.utcnow() - d
+      if age >= maxsnapage:
+        sourcesnap = s["id"]
+        break
+    if sourcesnap is None:
+      raise Exception('snap','Suitable snapshot not found for cloning.')
+    else:
+      # Clone the snap
+      debug("Snapshot id for autoclone: %s" % sourcesnap)
+      self.clone(sourcesnap, Configuration.get('autorestoreclonename', 'autorestore'))
+      return sourcesnap
+
+  def dropautoclone(self):
+    self.dropclone(Configuration.get('autorestoreclonename', 'autorestore'))
