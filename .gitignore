@@ -1,4 +1,5 @@
 *.pyc
 wallet*
+*demo*
 zfscredentials.cfg
 backup.cfg
