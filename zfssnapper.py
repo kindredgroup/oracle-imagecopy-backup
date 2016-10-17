@@ -27,7 +27,6 @@ def checkage():
     for s in snaps:
       d = zfs.str2date(s["creation"])
       age = datetime.utcnow() - d
-      print datetime.utcnow()
       if (minage is None) or (age < minage):
         minage = age
     s = "OK"
