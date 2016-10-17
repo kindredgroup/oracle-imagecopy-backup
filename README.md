@@ -7,6 +7,7 @@ Common database backup problems this tool tries to address:
 * Databases are getting ever larger, but backing them up using traditional incremental backup methods becomes a bottleneck. Traditional backupsets provide incremental backup option, since they require the full backup to be restored first and only after that all incremental backups can be applied in order. So to keep the restore time minimal, the full backup must be taken regularly. For a database that is tens-or-more terabytes in size, taking a full backup can even take days.
 * Oracle Recovery Manager RMAN has another backup type option as incrementally updated image copies, that keeps another copy of datafiles on alternate location and to update them using incremental backups. This allows implementing "incremental forever" backup strategy, where only incremental backups are taken from the database. Recovering from image copy backups is also easy and fast, the files can be directly used instead of the main data files. But image copy backups are quite complex to manage and they also miss many important backup features that are natively built in to backupsets, like history.
 * Restoring a large database from traditional backupset is very resource-intensive since the files are not directly usable. The full database needs to be restored, so for a database that is in tens-of-terabytes range this is very time consuming and it also consumes the same amount of storage. This results in a fact that companies rarely test their backups.
+* Why just not snapshot the database files directly? Can you really call it a backup then? What happens when the main production storage fails?
 
 Features:
 
@@ -228,6 +229,8 @@ Run configuration for each database (orcl in this example). The config command w
 ```
 backup.py orcl config
 ```
+
+Set **ARCHIVE\_LAG\_TARGET** parameter manually on the database. This step is optional, but if you set it, then database archives redo logs every specified amount of time. So at maximum your recovery point (the amount of data you loose in case of recovery) is limited to the time period set to **ARCHIVE\_LAG\_TARGET**.
 
 Run backup
 
