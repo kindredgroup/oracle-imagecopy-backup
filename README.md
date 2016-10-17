@@ -14,6 +14,10 @@ Features:
 
 Backup method:
 
+1. Set additional archivelog destination to the backup area, so no archivelog backup is needed, database writes them ti backup area automatically after switch.
+2. Backups are done by incrementally refreshing a image copy backups.
+3. Before image copy is refreshed, on storage side snapshot the backup filesystem and maintain historical backup retention by deleting the standalone snapshots not needed anymore.
+
 Tested with:
 
 * Oracle DB 11.2.0.4, but any 11gR2 should work
@@ -54,20 +58,18 @@ Essential when Oracle ZFS Storage Appliance is used.
 
 ### Prepare Oracle ZFS Storage Appliance for receiving the backups
 
-Enable REST API
-
-Create project
-
-Create filesystem under the project **for each** database to be backed up. Filesystem name must be the same as db\_unique\_name value for that database.
-
-Mount all backup filesystems under common directory, for example under **/nfs/backup**
+* Enable REST API
+* Create project. One project for each configuration file, then multiple autorestore configurations can run at the same time.
+* Configure backup filesystem settings on project level: set compression, filesystem user privileges and what hosts can mount the filesystems.
+* Create filesystem under the project **for each** database to be backed up. Filesystem name must be the same as db\_unique\_name value for that database.
+* Mount all backup filesystems under common directory, for example under **/nfs/backup**
 Here is an example from /etc/fstab
 
 ```
 zfssa.example.com:/export/demo-backup/orcl	/nfs/backup/orcl	nfs	rw,bg,soft,nointr,tcp,vers=3,timeo=600,rsize=32768,wsize=32768,actimeo=0	0 0
 ```
 
-Prepare user in ZFSSA with the following privileges
+* Prepare user in ZFSSA with the following privileges
 
 ### Setting up the scripts
 
@@ -95,7 +97,7 @@ You must check the following parameters:
 # Root directory for backups, backups will be placed under $backupdest/db_unique_name
 backupdest: /nfs/backup
 # Directory where tnsnames.ora and sqlnet.ora are located in relation to the backup scripts directory
-tnsadmin: tns.sample
+tnsadmin: tns.demo
 # OS user that executes the backup
 osuser: oracle
 # Oracle home
@@ -130,6 +132,7 @@ Configure each database in backup.demo.cfg, at the end of the file add a section
 # Database ID: select to_char(dbid) from v$database
 dbid: 1433672784
 # How many days of archivelogs to keep on disk
+# No need to make it a large number it has no effect on snapshot retention and older archivelogs are still stored in snapshots
 recoverywindow: 2
 # Backup parallelism (Enterprise Edition feature only)
 parallel: 4
@@ -173,7 +176,7 @@ cd $BACKUPSCRIPTS
 # Create a separate directory for each configuration, also version this directory contents
 mkdir tns.demo
 
-# Copy same
+# Copy sample sqlnet.ora and tnsnames.ora files
 cp tns.sample/*.ora tns.demo/
 
 cd tns.demo
@@ -232,9 +235,15 @@ Run backup
 backup.py orcl imagecopywithsnap
 ```
 
+Check if archivelogs exist on backup filesystem
+
+```
+backup.py orcl missingarchlog
+```
+
 ### Scheduling backups
 
-Option 1
+#### Option 1
 
 Each database can schedule its own backup using DBMS\_SCHEDULER external jobs. This option is the easiest to set up.
 **schedulebackup** and **schedulearchlog** are DBMS\_SCHEDULER calendar expressions when the backup jobs should run. 
@@ -247,7 +256,11 @@ To create the DBMS\_SCHEDULER jobs automatically for database **orcl** execute:
 backup.py orcl setschedule
 ```
 
-Option 2
+It creates a new database user BACKUPEXEC (or C##BACKUPEXEC for CDB) with minimal privileges and creates DBMS_SCHEDULER jobs to execute the backup and check that archivelogs exists on both destinations.
+
+Even if you choose some other scheduling method it is still highly recommended to execute missing archivelog check from DBMS_SCHEDULER, since under normal circumstances it will then just execute a lightweight dictionary query and not execute any external script at all. External script will be executed only when some archivelog is missing from backup area.
+
+#### Option 2
 
 [Jenkins](https://jenkins.io/) is a popular continous integration and continous delivery tool that can be also used for scheduling tasks on remote servers over SSH. This solution will provide a good GUI overview of all database backups, automatic emails when backup jobs fail and also provides full backup log file through Jenkins GUI.
 
@@ -257,13 +270,60 @@ Execute the following SSH command from Jenkins in order to get the full backup l
 BACKUP_LOG_TO_SCREEN=TRUE /path/to/scripts/backup.py orcl imagecopywithsnap
 ```
 
-Option X
+#### Option X
 
 There are plenty of other schedulers out there, but I'd just like to make a comment, that please avoid using crontab in clustered environment, then backups will keep running in case the server hosting the crontab scheduler fails :)
+
+## Recovering the backup
+
+TODO
+
+1. Snapshot the current backup area if need to restore the latest backup. DO NOT recover directly from files located in the backup area, because you will destroy the latest backup then.
+2. Clone the backup that contains the time period you want to restore. NB! Snapshot time must be larger than that time you need to recover to. In pseudo SQL code: **SELECT MIN(snaptime) restore\_from\_snapshot FROM snapshots WHERE snaptime > recoverytime;**
+3. Mount the clone
+4. Catalog files from clone
+4. Switch database to copy
+5. Recover database
+6. alter database open resetlogs
+7. Either open the database and while the database is open copy the files to production storage; or copy the files first and then open the database
 
 ## Setting up automatic restore tests
 
 NBNB! It is VERY important to use a separate host to run the autorestore tests that have no access to production database storage! Because it may be possible that Oracle tries to first overwrite or delete the necessary database files from their original locations! It is recommended to use a small server (small virtual machine) that only has access to backup storage over NFS.
+
+### Autorestore method
+
+1. Clone backup snapshot to be checked
+2. Mount the created clone
+3. Create a temporary instance that will switch datafiles to cloned image copy and apply ALL archivelogs present in the cloned snapshot area
+4. Open database read only and run either a custom query or default SCN-to-timestamp based query to verify the latest database time and if the validated time difference is too large, fail the restore test
+4. Either randomly or every X days check all datafile blocks for corruption
+5. Log autorestore results and log file to separate autorestore log database
+5. Drop the clone
+
+### Setting up autorestore
+
+TODO
+
+* user mounted filesystem
+* create catalog
+* autorestore settings
+
+### Executing autorestore
+
+Just running autorestore.py will not work, you have to acknowledge that the system running autorestore tests is not connected to production database storage.
+
+```
+$ ./autorestore.py backup.demo.cfg
+THIS AUTORESTORE PROCESS CAN BE VERY DANGEROUS IF THIS HOST HAS ACCESS TO PRODUCTION DATABASE FILESYSTEM/STORAGE.
+THE RESTORE PROCESS CAN OVERWRITE OR DELETE FILES ON THEIR ORIGINAL CONTROL FILE LOCATIONS!
+RUN IT ONLY ON A HOST THAT IS COMPLETELY SANDBOXED FROM PRODUCTION DATABASE ENVIRONMENT.
+TO CONTINUE, SET ENVIRONMENT VARIABLE AUTORESTORE_SAFE_SANDBOX TO VALUE TRUE (CASE SENSITIVE).
+```
+
+Read through the warning and do what is asked to continue. autorestore.py takes the configuration file name as argument and restores all databases registered in the configuration file.
+
+If different configuration files use different ZFSSA projects and different mount points on OS side (as recommended), then autorestore from different configuration files can run in parallel.
 
 ## Extending to other storage systems
 
@@ -272,6 +332,69 @@ ZFSSA is implemented in module zfssa.py
 
 ## Helper tools
 
-* zfssnapper.py - tool to run ZFSSA snapshot/clone operations from command line directly
-* exec_all.py
-* report.py
+### zfssnapper.py
+Tool to run ZFSSA snapshot/clone operations from command line directly.
+
+Create a new snapshot of database orcl backup area
+
+```
+[oracle@backup oracle-imagecopy-backup]$ ./zfssnapper.py orcl create
+Snapshot created: orcl-20161017T093914
+```
+
+Clone a snapshot
+
+```
+[oracle@backup oracle-imagecopy-backup]$ ./zfssnapper.py orcl clone orcl-20161017T093914
+Clone created.
+Clone name: orcl-20161017T093914-clone-20161017T094050
+Mount point: /export/demo-backup/orcl-20161017T093914-clone-20161017T094050
+Mount command (execute as root and replace zfs ip address and mount directory):
+mount -t nfs -o rw,bg,soft,nointr,rsize=32768,wsize=32768,tcp,vers=3,timeo=600 <zfs_ip_address>:/export/demo-backup/orcl-20161017T093914-clone-20161017T094050 <mount_directory_here>
+```
+
+List all snapshots from database orcl
+
+```
+$ ./zfssnapper.py orcl list
+orcl-20160524T153531 [2016-03-13 17:33:23 UTC] total=165MB unique=165MB clones=0
+orcl-20160524T155055 [2016-05-24 13:50:55 UTC] total=164MB unique=1MB clones=0
+orcl-20160524T155205 [2016-05-24 13:52:05 UTC] total=165MB unique=276kB clones=0
+orcl-20161017T093914 [2016-10-17 07:39:14 UTC] total=177MB unique=0B clones=1
+```
+
+List all clones
+
+```
+[oracle@backup oracle-imagecopy-backup]$ ./zfssnapper.py orcl listclones
+orcl-20161017T093914-clone-20161017T094050 [orcl-20161017T093914] [mount point: /export/demo-backup/orcl-20161017T093914-clone-20161017T094050]
+```
+
+Drop clone
+
+```
+[oracle@backup oracle-imagecopy-backup]$ ./zfssnapper.py orcl dropclone orcl-20161017T093914-clone-20161017T094050
+Clone dropped.
+```
+
+Check the latest snapshot age, for example for use with Nagios (exits with code 1 for warning state and 2 for critical state)
+
+```
+[oracle@backup oracle-imagecopy-backup]$ ./zfssnapper.py orcl checkage
+OK: The latest snapshot age 0:03:57.763734
+```
+
+### exec_all.py
+
+Execute backup.py action on all databases in a configuration file (in serial). Exclusion list can be added.
+
+```
+$ ./exec_all.py
+Usage: exec_all.py <action for backup.py> [comma separated exclude list]
+
+$ ./exec_all.py imagecopywithsnap
+```
+
+### report.py
+
+Detailed backup report for all configured databases.
