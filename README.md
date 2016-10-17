@@ -4,20 +4,24 @@ Toolset for helping DBAs manage incrementally updated image copy backups of Orac
 
 Common database backup problems this tool tries to address:
 
-* Databases are getting ever larger, but backing them up using traditional incremental backup methods becomes a bottleneck. Traditional backupsets provide incremental backup option, since they require the full backup to be restored first and only after that all incremental backups can be applied in order. So to keep the restore time minimal, the full backup must be taken regularly. For a database that is tens-or-more terabytes in size, taking a full backup can even take days.
-* Oracle Recovery Manager RMAN has another backup type option as incrementally updated image copies, that keeps another copy of datafiles on alternate location and to update them using incremental backups. This allows implementing "incremental forever" backup strategy, where only incremental backups are taken from the database. Recovering from image copy backups is also easy and fast, the files can be directly used instead of the main data files. But image copy backups are quite complex to manage and they also miss many important backup features that are natively built in to backupsets, like history.
+* Databases are getting ever larger, but backing them up using traditional incremental backup methods becomes a bottleneck. Traditional backupsets provide incremental backup option, but since they require the full backup to be restored first and only after that all incremental backups can be applied in order. So to keep the restore time minimal, the full backup must be taken regularly. For a database that is tens-or-more terabytes in size, taking a full backup can even take days.
+* Oracle Recovery Manager RMAN has another backup type option as incrementally updated image copies, that keeps another copy of datafiles on alternate location and to updates them using incremental backups. This allows implementing **incremental forever** backup strategy, where only incremental backups are taken from the database. Recovering from image copy backups is also easy and fast, no datafile restore is needed, image copy files can be used directly as data files. But image copy backups are quite complex to manage and they also miss many important backup features that are natively built in to backupsets, like history and compression/deduplication.
 * Restoring a large database from traditional backupset is very resource-intensive since the files are not directly usable. The full database needs to be restored, so for a database that is in tens-of-terabytes range this is very time consuming and it also consumes the same amount of storage. This results in a fact that companies rarely test their backups.
-* Why just not snapshot the database files directly? Can you really call it a backup then? What happens when the main production storage fails?
+* To address these problems, some companies take snapshots from the database files directly. But can you really call it a backup? What happens when the main production storage fails?
 
-Features:
+Possible solution that this script set implements:
 
-* Orchestration of all steps and between all involved systems necessary to incrementally update image copy backups.
+* Implement incremental forever backup strategy using incrementally updated image copies that can (and should) be stored on an alternate storage.
+* Eliminating the need for separate backup process for archivelog files by setting up an additional archivelog destination on backup storage together with datafile image copies and integrating it to the backup and restore processes.
+* Use of advanced storage features to implement features natively missing from image copies:
+	* To provide history storage snapshot is created before refreshing image copy. Since archivelogs are stored in the same backup area, then each snapshots is completely self contained and has no dependencies to other snapshots.
+	* Backup retention is implemented by just deleting snapshots that are not needed anymore. Since each snapshots is self contained and complete, then this makes it possible to implement even more complex backup retention scenarios than RMAN backupsets are capable of.
+	* Backup compression and deduplication are done by storage. No database CPU is wasted on this expensive operation.
+	* Storage thin clones can be used to create clones from the database.
+* Automate backup testing so it can be run every day and with minimal storage requirements using thin clones.
 
-Backup method:
 
-1. Set additional archivelog destination to the backup area, so no archivelog backup is needed, database writes them ti backup area automatically after switch.
-2. Backups are done by incrementally refreshing a image copy backups.
-3. Before image copy is refreshed, on storage side snapshot the backup filesystem and maintain historical backup retention by deleting the standalone snapshots not needed anymore.
+This script set takes care of all the necessary orchestration steps between all involved systems to successfully implement the mentioned solution.
 
 Tested with:
 
@@ -29,8 +33,8 @@ Tested with:
 Requirements:
 
 * Python 2.6 or Python 2.7
-* Pyhton-Requests
-* Direct NFS in use for Oracle DB (optional, but highly recommended)
+* Pyhton-requests
+* Direct NFS in use for Oracle DB (optional, but highly recommended for database availability)
 * Storage for backups must support NFS, snapshots, cloning and optionally compression (deduplication)
 
 It currently supports Oracle ZFS Storage Appliance as backup storage system, but it is easy to extend for other systems. It is planned to add support for Netapp next.
@@ -39,8 +43,16 @@ It currently supports Oracle ZFS Storage Appliance as backup storage system, but
 
 ### Prepare OS
 
+Oracle Linux 6
+
 ```
 yum install python-requests python
+```
+
+Oracle Linux 7
+
+```
+yum install python-requests python2
 ```
 
 ### Prepare Oracle database home
