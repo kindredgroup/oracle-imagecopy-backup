@@ -398,3 +398,7 @@ $ ./exec_all.py imagecopywithsnap
 ### report.py
 
 Detailed backup report for all configured databases.
+
+### autorestore_check.sql
+
+Sample PL/SQL procedures and queries to automatically monitor autorestore status (from Nagios for example). Use these as pseudo code and adapt them to your monitoring system use.
