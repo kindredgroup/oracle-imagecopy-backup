@@ -318,11 +318,130 @@ NBNB! It is VERY important to use a separate host to run the autorestore tests t
 
 ### Setting up autorestore
 
-TODO
+Autorestore settings are in the backup configuration file, backup.demo.cfg when following the example in this document, section **autorestore**.
 
-* user mounted filesystem
-* create catalog
-* autorestore settings
+```
+[autorestore]
+# The directory to be used for restore tests. Must be empty, everything under it is destroyed.
+# NB! This directory WILL BE CLEANED.
+autorestoredestination: /nfs/autorestore/dest
+# Clone name
+autorestoreclonename: autorestore
+# Place to mount the clone. This MUST be already described in /etc/fstab as mountable by user (with options fg,noauto,user).
+# For example:
+# zfssa.example.com:/export/demo-backup/autorestore       /nfs/autorestore/mnt    nfs     rw,fg,soft,nointr,rsize=32768,wsize=32768,tcp,vers=3,timeo=600,noauto,user      0 0
+autorestoremountpoint: /nfs/autorestore/mnt
+# Restore will be done using the latest snapshot that is at least this many hours old
+autorestoresnapage: 0
+# Autorestore log files
+autorestorelogdir: /nfs/autorestore/log
+# Maximum difference between auto restore target date and customverifydate in hours
+autorestoremaxtoleranceminutes: 5
+# Autorestorecatalog connect string
+# First create user manually in the database:
+#    create user autorestore identified by complexpassword;
+#    grant create session,create table,create sequence,create procedure,create view,create job to autorestore;
+#    alter user autorestore quota unlimited on users;
+# Then add it to password wallet and run ./autorestore.py configfilename --createcatalog
+autorestorecatalog: /@autorestore
+# Chance of doing a full database validation after restore, the larger the integer, the less likely it will be. Set to 0 to disable, set to 1 to always validate. 7 means 1/7 chance.
+autorestorevalidatechance: 0
+# Modulus of doing a full database validation. Validation is done if: mod(current day, autorestoremodulus) == mod(hash(database unique name), autorestoremodulus).
+# This quarantees that validation for each database is done after every x days consistently. 0 means disable.
+# Set either autorestorevalidatechance or autorestoremodulus to 0, they will not work concurrently, modulus if preferred.
+autorestoremodulus: 30
+```
+
+Description for each parameter in the the configuration file, but the basic workflow is the following:
+
+Create a schema in some database to be used as autorestore catalog. All autorestore results, statistics and logs will be stored there.
+
+```
+create user autorestore identified by complexpassword;
+grant create session,create table,create sequence,create procedure,create view,create job to autorestore;
+alter user autorestore quota unlimited on users;
+```
+
+Add its password to wallet and connection string to tnsnames.ora. Wallet and tnsnames.ora are the same files used to connect to backed up databases from the same configuration file.
+
+```
+# Add password to wallet
+$ORACLE_HOME/bin/mkstore -wrl $BACKUPSCRIPTS/wallet.demo -createCredential AUTORESTORE autorestore complexpassword
+
+# Add database connection information to tns.demo/tnsnames.ora
+AUTORESTORE =
+  (DESCRIPTION=
+    (ADDRESS=
+      (PROTOCOL=TCP)
+      (HOST=dbhost.example.com)
+      (PORT=1521)
+    )
+    (CONNECT_DATA=
+      (SERVICE_NAME=autorestorecatalog.sample.example.com)
+    )
+  )
+```
+
+Create catalog schema
+
+```
+./autorestore.py backup.demo.cfg --createcatalog
+```
+
+Create directories in local filesystem to be used by autorestore files. To be able to run multiple autorestore configuration runs in parallel, then these directories should be different for each configuration.
+
+The directories are configured using parameters:
+
+```
+autorestoredestination: /nfs/autorestore/dest
+autorestoremountpoint: /nfs/autorestore/mnt
+autorestorelogdir: /nfs/autorestore/log
+```
+
+Create these directories on the file system, they must be readable and writable by oracle user.
+
+```
+mkdir -p /nfs/autorestore/dest
+mkdir -p /nfs/autorestore/mnt
+mkdir -p /nfs/autorestore/log
+```
+
+The script will choose a snapshot to restore and clone it under the name **autorestore** as a new file system in the storage. To avoid the need to run any root commands, already create a on-demand user mountable mount point in /etc/fstab. It must have the following mount parameters set:
+
+* **fg** - mount will be done in foregriund and mount command returns when file system is mounted
+* **noauto** - do not mount file system automatically, since the file system only exists during autorestore run
+* **user** - file system is mountable by regular users, this is to avoid any need for running something as root
+* **rw** - file system is readable and writable
+
+```
+# Add autorestore mountpoint to /etc/fstab
+zfssa.example.com:/export/demo-backup/autorestore       /nfs/autorestore/mnt    nfs     rw,fg,soft,nointr,rsize=32768,wsize=32768,tcp,vers=3,timeo=600,noauto,user      0 0
+```
+
+The following parameters in for configuration file control how often all database blocks are validated using RMAN command **backup validate check logical database**. Use only one of these options.
+
+* **autorestorevalidatechance** - Validation is random, chance of validating for the current run is 1/autorestorevalidatechance. Set to 0 to disable.
+* **autorestoremodulus** - Validation is run every specified amount of days. Validation is done if: mod(current day, autorestoremodulus) == mod(hash(database unique name), autorestoremodulus). Set to 0 to disable.
+
+After every successful restore, database will be opened read only to compare the database time to the time snapshot was created. The allowed time difference is configured using parameter **autorestoremaxtoleranceminutes**. If the time difference exceeds the tolerance (specified in minutes), the restore will be marked as a failure.
+
+The default query to get the database restore time is: **select max(time\_dp) from sys.smon\_scn\_time**, but this timestamp is updated by database every few hours only, so it is not a very good and precise time. So whenever possible, set a custom query to seturn the database time, for example maximum date from a busy transaction table. The specified custom query must return a single DATE value.
+
+Custom time query is set in the database configuration section for each database:
+
+```
+[orcl]
+dbid: 1433672784
+recoverywindow: 2
+parallel: 4
+snapexpirationdays: 31
+snapexpirationmonths: 6
+registercatalog: true
+hasdataguard: false
+schedulebackup: FREQ=DAILY;BYHOUR=10;BYMINUTE=0
+schedulearchlog: FREQ=HOURLY;BYHOUR=21
+customverifydate: select max(d) from (select cast(max(createtime) as date) d from exampleapp.transactions union all select current_dt from dbauser.autorestore_ping_timestamp)
+```
 
 ### Executing autorestore
 
@@ -342,8 +461,9 @@ If different configuration files use different ZFSSA projects and different moun
 
 ## Extending to other storage systems
 
-Create new python module to implement class **SnapHandler** from backupcommon.py. Change parameters **snappermodule** and **snapperclass** in backup.cfg to point to the new class.
-ZFSSA is implemented in module zfssa.py
+* Create new python module to implement class **SnapHandler** from backupcommon.py.
+* Change parameters **snappermodule** and **snapperclass** in backup.cfg to point to the new class.
+* ZFSSA is implemented in module zfssa.py
 
 ## Helper tools
 
