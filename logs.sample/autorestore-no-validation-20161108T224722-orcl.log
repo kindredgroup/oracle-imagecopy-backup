@@ -1,0 +1,380 @@
+2016-11-08 22:47:22,309 INFO     orcl            Starting to restore
+2016-11-08 22:47:22,310 INFO     orcl            Logfile: /nfs/autorestore/log/20161108T224722-orcl.log
+2016-11-08 22:47:22,404 DEBUG    orcl            ACTION: Cleaning destination directory /nfs/autorestore/dest
+2016-11-08 22:47:22,405 DEBUG    orcl            Sending GET to pools/pool1/projects/demo-backup/filesystems/orcl/snapshots
+2016-11-08 22:47:22,450 DEBUG    orcl            Return code: 200
+2016-11-08 22:47:22,453 DEBUG    orcl            Snapshot id for autoclone: orcl-20161108T223946
+2016-11-08 22:47:22,453 DEBUG    orcl            Sending PUT to pools/pool1/projects/demo-backup/filesystems/orcl/snapshots/orcl-20161108T223946/clone
+2016-11-08 22:47:23,593 DEBUG    orcl            Return code: 201
+2016-11-08 22:47:23,628 DEBUG    orcl            Next database validation in 2 days: 2016-11-10
+2016-11-08 22:47:23,634 DEBUG    orcl            ACTION: Generated init file /nfs/autorestore/dest/init.ora
+*.compatible='12.1.0.2.0'
+*.control_files='/nfs/autorestore/dest/restore.cf'
+*.db_block_size=8192
+*.db_create_file_dest='/nfs/autorestore/dest'
+*.db_files=200
+*.db_name='orcl'
+*.filesystemio_options='SETALL'
+*.pga_aggregate_target=2G
+*.processes=300
+*.remote_login_passwordfile='EXCLUSIVE'
+*.sga_max_size=3G
+*.sga_target=3G
+*.undo_management='AUTO'
+*.undo_tablespace='UNDOTBS1'
+*.job_queue_processes=0
+*.diagnostic_dest='/nfs/autorestore/log'
+*.instance_number=1
+*.thread=1
+2016-11-08 22:47:23,634 DEBUG    orcl            ACTION: startup nomount
+2016-11-08 22:47:23,635 DEBUG    orcl            SQL*Plus execution starts
+SQL> conn / as sysdba
+Connected to an idle instance.
+SQL> whenever sqlerror exit failure
+SQL> startup nomount pfile='/nfs/autorestore/dest/init.ora'
+ORACLE instance started.
+Total System Global Area 3221225472 bytes                                                                                                                                                               
+Fixed Size                  2929552 bytes                                                                                                                                                               
+Variable Size             654314608 bytes                                                                                                                                                               
+Database Buffers         2550136832 bytes                                                                                                                                                               
+Redo Buffers               13844480 bytes                                                                                                                                                               
+SQL> spool off
+2016-11-08 22:47:32,217 DEBUG    orcl            SQL*Plus execution successful
+2016-11-08 22:47:32,284 DEBUG    orcl            ACTION: mount database and catalog files
+2016-11-08 22:47:32,353 DEBUG    orcl            RMAN execution starts
+
+Recovery Manager: Release 12.1.0.2.0 - Production on Tue Nov 8 22:47:33 2016
+
+Copyright (c) 1982, 2014, Oracle and/or its affiliates.  All rights reserved.
+
+RMAN> 
+echo set on
+
+RMAN> connect target *
+connected to target database: ORCL (not mounted)
+
+RMAN> run {
+2> allocate channel c1 device type disk;
+3> restore controlfile from '/nfs/autorestore/mnt/after_backup_controlfile.cf';
+4> }
+using target database control file instead of recovery catalog
+allocated channel: c1
+channel c1: SID=22 device type=DISK
+
+Starting restore at 2016-11-08 22:47:37
+
+channel c1: restoring control file
+channel c1: restore complete, elapsed time: 00:00:01
+output file name=/nfs/autorestore/dest/restore.cf
+Finished restore at 2016-11-08 22:47:38
+released channel: c1
+
+
+RMAN> alter database mount;
+Statement processed
+
+
+RMAN> change archivelog all uncatalog;
+uncataloged archived log
+archived log file name=/u01/app/oracle/oradata/ORCL/archivelog/2016_11_08/o1_mf_1_90_d24gpx44_.arc RECID=132 STAMP=927409901
+uncataloged archived log
+archived log file name=/nfs/backup/orcl/archivelog/1_90_905892048.dbf RECID=133 STAMP=927409901
+uncataloged archived log
+archived log file name=/u01/app/oracle/oradata/ORCL/archivelog/2016_11_08/o1_mf_1_91_d24gtjx4_.arc RECID=134 STAMP=927410016
+uncataloged archived log
+archived log file name=/nfs/backup/orcl/archivelog/1_91_905892048.dbf RECID=135 STAMP=927410016
+uncataloged archived log
+archived log file name=/u01/app/oracle/oradata/ORCL/archivelog/2016_11_08/o1_mf_1_92_d24gv3fd_.arc RECID=136 STAMP=927410035
+uncataloged archived log
+archived log file name=/nfs/backup/orcl/archivelog/1_92_905892048.dbf RECID=137 STAMP=927410035
+uncataloged archived log
+archived log file name=/u01/app/oracle/oradata/ORCL/archivelog/2016_11_08/o1_mf_1_93_d24kcmtc_.arc RECID=138 STAMP=927412612
+uncataloged archived log
+archived log file name=/nfs/backup/orcl/archivelog/1_93_905892048.dbf RECID=139 STAMP=927412612
+Uncataloged 8 objects
+
+
+
+RMAN> change backup device type disk unavailable;
+changed backup piece unavailable
+backup piece handle=/nfs/backup/orcl/c-1433672784-20161020-01 RECID=139 STAMP=925734725
+changed backup piece unavailable
+backup piece handle=/nfs/backup/orcl/c-1433672784-20161108-00 RECID=144 STAMP=927409888
+changed backup piece unavailable
+backup piece handle=/nfs/backup/orcl/c-1433672784-20161108-01 RECID=147 STAMP=927409897
+changed backup piece unavailable
+backup piece handle=/nfs/backup/orcl/c-1433672784-20161108-02 RECID=152 STAMP=927410025
+changed backup piece unavailable
+backup piece handle=/nfs/backup/orcl/c-1433672784-20161108-03 RECID=155 STAMP=927410031
+changed backup piece unavailable
+backup piece handle=/nfs/backup/orcl/c-1433672784-20161108-04 RECID=160 STAMP=927412621
+changed backup piece unavailable
+backup piece handle=/nfs/backup/orcl/6orkecch_1_1 RECID=161 STAMP=927412625
+Changed 7 objects to UNAVAILABLE status
+
+
+
+RMAN> change copy of database uncatalog;
+uncataloged datafile copy
+datafile copy file name=/nfs/backup/orcl/data_D-ORCL_I-1433672784_TS-SYSTEM_FNO-1_3tr6dcnn RECID=99 STAMP=927412620
+uncataloged datafile copy
+datafile copy file name=/nfs/backup/orcl/data_D-ORCL_I-1433672784_TS-SYSAUX_FNO-2_3ur6dcnn RECID=100 STAMP=927412620
+uncataloged datafile copy
+datafile copy file name=/nfs/backup/orcl/data_D-ORCL_I-1433672784_TS-UNDOTBS1_FNO-3_3vr6dcog RECID=101 STAMP=927412620
+uncataloged datafile copy
+datafile copy file name=/nfs/backup/orcl/data_D-ORCL_I-1433672784_TS-USERS_FNO-4_40r6dcok RECID=98 STAMP=927412620
+Uncataloged 4 objects
+
+
+
+RMAN> catalog start with '/nfs/autorestore/mnt/' noprompt;
+searching for all files that match the pattern /nfs/autorestore/mnt/
+
+List of Files Unknown to the Database
+=====================================
+File Name: /nfs/autorestore/mnt/c-1433672784-20161020-01
+File Name: /nfs/autorestore/mnt/snapcf_orcl.f
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-01
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-05
+File Name: /nfs/autorestore/mnt/autorestore.cfg
+File Name: /nfs/autorestore/mnt/backup.lck
+File Name: /nfs/autorestore/mnt/after_backup_controlfile.cf
+File Name: /nfs/autorestore/mnt/tmpkj89mU.lck
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-02
+File Name: /nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-SYSAUX_FNO-2_3ur6dcnn
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-00
+File Name: /nfs/autorestore/mnt/6orkecch_1_1
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161108T223650_imagecopywithsnap.log
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161108T215108_imagecopywithsnap.log
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161108T223945_imagecopywithsnap.log
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161020T123144_imagecopywithsnap.log
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161020T123026_config.log
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161108T215335_imagecopywithsnap.log
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161108T215324_config.log
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-03
+File Name: /nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-SYSTEM_FNO-1_3tr6dcnn
+File Name: /nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-UNDOTBS1_FNO-3_3vr6dcog
+File Name: /nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-USERS_FNO-4_40r6dcok
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-04
+File Name: /nfs/autorestore/mnt/archivelog/1_90_905892048.dbf
+File Name: /nfs/autorestore/mnt/archivelog/1_95_905892048.dbf
+File Name: /nfs/autorestore/mnt/archivelog/1_92_905892048.dbf
+File Name: /nfs/autorestore/mnt/archivelog/1_93_905892048.dbf
+File Name: /nfs/autorestore/mnt/archivelog/1_94_905892048.dbf
+File Name: /nfs/autorestore/mnt/archivelog/1_91_905892048.dbf
+cataloging files...
+cataloging done
+
+List of Cataloged Files
+=======================
+File Name: /nfs/autorestore/mnt/c-1433672784-20161020-01
+File Name: /nfs/autorestore/mnt/snapcf_orcl.f
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-01
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-05
+File Name: /nfs/autorestore/mnt/after_backup_controlfile.cf
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-02
+File Name: /nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-SYSAUX_FNO-2_3ur6dcnn
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-00
+File Name: /nfs/autorestore/mnt/6orkecch_1_1
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-03
+File Name: /nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-SYSTEM_FNO-1_3tr6dcnn
+File Name: /nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-UNDOTBS1_FNO-3_3vr6dcog
+File Name: /nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-USERS_FNO-4_40r6dcok
+File Name: /nfs/autorestore/mnt/c-1433672784-20161108-04
+File Name: /nfs/autorestore/mnt/archivelog/1_90_905892048.dbf
+File Name: /nfs/autorestore/mnt/archivelog/1_95_905892048.dbf
+File Name: /nfs/autorestore/mnt/archivelog/1_92_905892048.dbf
+File Name: /nfs/autorestore/mnt/archivelog/1_93_905892048.dbf
+File Name: /nfs/autorestore/mnt/archivelog/1_94_905892048.dbf
+File Name: /nfs/autorestore/mnt/archivelog/1_91_905892048.dbf
+
+List of Files Which Were Not Cataloged
+=======================================
+File Name: /nfs/autorestore/mnt/autorestore.cfg
+  RMAN-07517: Reason: The file header is corrupted
+File Name: /nfs/autorestore/mnt/backup.lck
+  RMAN-07517: Reason: The file header is corrupted
+File Name: /nfs/autorestore/mnt/tmpkj89mU.lck
+  RMAN-07517: Reason: The file header is corrupted
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161108T223650_imagecopywithsnap.log
+  RMAN-07517: Reason: The file header is corrupted
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161108T215108_imagecopywithsnap.log
+  RMAN-07517: Reason: The file header is corrupted
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161108T223945_imagecopywithsnap.log
+  RMAN-07517: Reason: The file header is corrupted
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161020T123144_imagecopywithsnap.log
+  RMAN-07517: Reason: The file header is corrupted
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161020T123026_config.log
+  RMAN-07517: Reason: The file header is corrupted
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161108T215335_imagecopywithsnap.log
+  RMAN-07517: Reason: The file header is corrupted
+File Name: /nfs/autorestore/mnt/backup_logs/orcl_20161108T215324_config.log
+  RMAN-07517: Reason: The file header is corrupted
+
+
+RMAN> sql "alter database flashback off";
+sql statement: alter database flashback off
+
+
+RMAN> exit
+
+
+Recovery Manager complete.
+2016-11-08 22:47:45,993 DEBUG    orcl            RMAN execution time 0:00:13.609732
+2016-11-08 22:47:45,997 DEBUG    orcl            RMAN execution successful
+2016-11-08 22:47:45,998 DEBUG    orcl            ACTION: disable block change tracking
+2016-11-08 22:47:46,001 DEBUG    orcl            SQL*Plus execution starts
+SQL> conn / as sysdba
+Connected.
+SQL> whenever sqlerror exit failure
+SQL> alter database rename file '/u01/app/oracle/oradata/ORCL/changetracking/o1_mf_cn8pwrjs_.chg' to '/nfs/autorestore/dest/bct.bct';
+
+Database altered.
+
+Elapsed: 00:00:00.07
+SQL> alter database disable block change tracking;
+
+Database altered.
+
+Elapsed: 00:00:00.02
+SQL> select * from V$BLOCK_CHANGE_TRACKING;
+DISABLED                                                                                                                                                                                                
+                                                                                                                                                                                                        
+                                                                                                                                                                                                        
+                                                                                                                                                                                                        
+
+Elapsed: 00:00:00.01
+SQL> spool off
+2016-11-08 22:47:46,268 DEBUG    orcl            SQL*Plus execution successful
+2016-11-08 22:47:46,270 DEBUG    orcl            ACTION: create missing datafiles
+2016-11-08 22:47:46,273 DEBUG    orcl            SQL*Plus execution starts
+RENAMEDF-switch database to copy;                                                                                                                                                                       
+
+PL/SQL procedure successfully completed.
+
+Elapsed: 00:00:00.07
+
+PL/SQL procedure successfully completed.
+
+Elapsed: 00:00:00.02
+2016-11-08 22:47:46,412 DEBUG    orcl            SQL*Plus execution successful
+2016-11-08 22:47:46,417 DEBUG    orcl            ACTION: switch and recover
+2016-11-08 22:47:46,419 DEBUG    orcl            RMAN execution starts
+
+Recovery Manager: Release 12.1.0.2.0 - Production on Tue Nov 8 22:47:46 2016
+
+Copyright (c) 1982, 2014, Oracle and/or its affiliates.  All rights reserved.
+
+RMAN> 
+echo set on
+
+RMAN> connect target *
+connected to target database: ORCL (DBID=1433672784, not open)
+
+RMAN> switch database to copy;
+using target database control file instead of recovery catalog
+datafile 1 switched to datafile copy "/nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-SYSTEM_FNO-1_3tr6dcnn"
+datafile 2 switched to datafile copy "/nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-SYSAUX_FNO-2_3ur6dcnn"
+datafile 3 switched to datafile copy "/nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-UNDOTBS1_FNO-3_3vr6dcog"
+datafile 4 switched to datafile copy "/nfs/autorestore/mnt/data_D-ORCL_I-1433672784_TS-USERS_FNO-4_40r6dcok"
+
+
+RMAN> 
+
+RMAN> run {
+2> allocate channel c1 device type disk;
+3> set newname for database to new;
+4> set until time "to_date('2016-11-08 22:39:45', 'yyyy-mm-dd hh24:mi:ss')";
+5> recover database;
+6> }
+allocated channel: c1
+channel c1: SID=22 device type=DISK
+
+executing command: SET NEWNAME
+
+executing command: SET until clause
+
+Starting recover at 2016-11-08 22:47:47
+
+starting media recovery
+
+archived log for thread 1 with sequence 94 is already on disk as file /nfs/autorestore/mnt/archivelog/1_94_905892048.dbf
+archived log for thread 1 with sequence 95 is already on disk as file /nfs/autorestore/mnt/archivelog/1_95_905892048.dbf
+archived log file name=/nfs/autorestore/mnt/archivelog/1_94_905892048.dbf thread=1 sequence=94
+archived log file name=/nfs/autorestore/mnt/archivelog/1_95_905892048.dbf thread=1 sequence=95
+media recovery complete, elapsed time: 00:00:00
+Finished recover at 2016-11-08 22:47:48
+released channel: c1
+
+
+RMAN> exit
+
+
+Recovery Manager complete.
+2016-11-08 22:47:48,960 DEBUG    orcl            RMAN execution time 0:00:02.531046
+2016-11-08 22:47:48,961 DEBUG    orcl            RMAN execution successful
+2016-11-08 22:47:48,961 DEBUG    orcl            ACTION: opening database to verify the result
+2016-11-08 22:47:48,964 DEBUG    orcl            SQL*Plus execution starts
+alter database open read only
+
+Database altered.
+
+Elapsed: 00:00:01.29
+Set time formatting
+
+Session altered.
+
+Elapsed: 00:00:00.00
+
+Session altered.
+
+Elapsed: 00:00:00.00
+Query database timestamps
+CURRENT DATABASE SCN: 804125                                                                                                                                                                            
+LAST ROW IN SCN TO TIME MAP: 2016-11-08 21:37:23                                                                                                                                                        
+MIN/MAX TIME FROM ARCHLOGS: 2016-11-08 22:37:12-2016-11-08 22:39:46                                                                                                                                     
+CUSTOM VERIFICATION TIME: 2016-11-08 22:39:35                                                                                                                                                           
+
+Elapsed: 00:00:00.30
+Datafiles where online_status not in ('SYSTEM','ONLINE') or status <> 'AVAILABLE'
+
+no rows selected
+
+Elapsed: 00:00:00.10
+2016-11-08 22:47:50,758 DEBUG    orcl            SQL*Plus execution successful
+2016-11-08 22:47:50,900 DEBUG    orcl            Expected time: 2016-11-08 22:39:45
+2016-11-08 22:47:50,901 DEBUG    orcl            Verified time: 2016-11-08 22:39:35
+2016-11-08 22:47:50,901 DEBUG    orcl            VERIFY: Time difference 0:00:10
+2016-11-08 22:47:50,901 DEBUG    orcl            ACTION: shutdown
+2016-11-08 22:47:50,910 DEBUG    orcl            SQL*Plus execution starts
+SQL> conn / as sysdba
+Connected.
+SQL> shutdown immediate
+Database closed.
+Database dismounted.
+ORACLE instance shut down.
+SQL> spool off
+2016-11-08 22:48:07,954 DEBUG    orcl            SQL*Plus execution successful
+2016-11-08 22:48:08,013 DEBUG    orcl            Sending GET to pools/pool1/projects/demo-backup/filesystems/autorestore
+2016-11-08 22:48:08,169 DEBUG    orcl            Return code: 200
+2016-11-08 22:48:08,170 DEBUG    orcl            Sending DELETE to pools/pool1/projects/demo-backup/filesystems/autorestore
+2016-11-08 22:48:08,999 DEBUG    orcl            Return code: 204
+2016-11-08 22:48:09,000 DEBUG    orcl            Logging the result to catalog.
+2016-11-08 22:48:09,001 DEBUG    orcl            SQLLDR execution starts
+2016-11-08 22:48:09,082 ERROR    orcl            SQLLDR exited with code 1
+2016-11-08 22:48:09,084 DEBUG    orcl            SQL*Plus execution starts
+ERROR:
+ORA-12545: Connect failed because target host or object does not exist 
+
+
+2016-11-08 22:48:09,116 ERROR    orcl            SQL*Plus exited with code 1
+2016-11-08 22:48:09,116 ERROR    orcl            Logging the result to catalog failed.
+Traceback (most recent call last):
+  File "./autorestore.py", line 265, in runrestore
+    exec_sqlplus(restoretemplate.get('insertlog'), False, returnoutput=True)
+  File "./autorestore.py", line 105, in exec_sqlplus
+    return OracleExec.sqlplus(finalscript, silent=returnoutput)
+  File "/home/oracle/oracle-imagecopy-backup/backupcommon.py", line 269, in sqlplus
+    raise Exception('sqlplus', "sqlplus exited with code %d" % p.returncode)
+Exception: ('sqlplus', 'sqlplus exited with code 1')
+2016-11-08 22:48:09,119 INFO     orcl            Restore successful, elapsed time: 0:00:46.689587
