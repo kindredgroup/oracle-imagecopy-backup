@@ -1,0 +1,168 @@
+2016-11-08 21:53:24,140 DEBUG    orcl            Oracle home: /u01/app/oracle/product/12.1.0.2/db
+2016-11-08 21:53:24,193 INFO     orcl            Configuration file: /home/oracle/oracle-imagecopy-backup/backup.cfg
+2016-11-08 21:53:24,202 INFO     orcl            Running RMAN configuration
+2016-11-08 21:53:24,203 DEBUG    orcl            RMAN execution starts
+
+Recovery Manager: Release 12.1.0.2.0 - Production on Tue Nov 8 21:53:24 2016
+
+Copyright (c) 1982, 2014, Oracle and/or its affiliates.  All rights reserved.
+
+RMAN> 
+echo set on
+
+RMAN> CONNECT TARGET *
+connected to target database: ORCL (DBID=1433672784)
+
+RMAN> 
+
+RMAN> CONFIGURE ARCHIVELOG DELETION POLICY TO NONE;
+using target database control file instead of recovery catalog
+old RMAN configuration parameters:
+CONFIGURE ARCHIVELOG DELETION POLICY TO NONE;
+new RMAN configuration parameters:
+CONFIGURE ARCHIVELOG DELETION POLICY TO NONE;
+new RMAN configuration parameters are successfully stored
+
+
+RMAN> CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 2 DAYS;
+old RMAN configuration parameters:
+CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 2 DAYS;
+new RMAN configuration parameters:
+CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 2 DAYS;
+new RMAN configuration parameters are successfully stored
+
+
+RMAN> CONFIGURE BACKUP OPTIMIZATION ON;
+old RMAN configuration parameters:
+CONFIGURE BACKUP OPTIMIZATION ON;
+new RMAN configuration parameters:
+CONFIGURE BACKUP OPTIMIZATION ON;
+new RMAN configuration parameters are successfully stored
+
+
+RMAN> CONFIGURE DEFAULT DEVICE TYPE TO DISK;
+old RMAN configuration parameters:
+CONFIGURE DEFAULT DEVICE TYPE TO DISK;
+new RMAN configuration parameters:
+CONFIGURE DEFAULT DEVICE TYPE TO DISK;
+new RMAN configuration parameters are successfully stored
+
+
+RMAN> CONFIGURE CONTROLFILE AUTOBACKUP ON;
+old RMAN configuration parameters:
+CONFIGURE CONTROLFILE AUTOBACKUP ON;
+new RMAN configuration parameters:
+CONFIGURE CONTROLFILE AUTOBACKUP ON;
+new RMAN configuration parameters are successfully stored
+
+
+RMAN> CONFIGURE DEVICE TYPE DISK PARALLELISM 4 BACKUP TYPE TO BACKUPSET;
+old RMAN configuration parameters:
+CONFIGURE DEVICE TYPE DISK PARALLELISM 4 BACKUP TYPE TO BACKUPSET;
+new RMAN configuration parameters:
+CONFIGURE DEVICE TYPE DISK PARALLELISM 4 BACKUP TYPE TO BACKUPSET;
+new RMAN configuration parameters are successfully stored
+
+
+RMAN> CONFIGURE CHANNEL DEVICE TYPE DISK FORMAT '/nfs/backup/orcl/%U';
+old RMAN configuration parameters:
+CONFIGURE CHANNEL DEVICE TYPE DISK FORMAT   '/nfs/backup/orcl/%U';
+new RMAN configuration parameters:
+CONFIGURE CHANNEL DEVICE TYPE DISK FORMAT   '/nfs/backup/orcl/%U';
+new RMAN configuration parameters are successfully stored
+
+
+RMAN> CONFIGURE CONTROLFILE AUTOBACKUP FORMAT FOR DEVICE TYPE DISK TO '/nfs/backup/orcl/%F';
+old RMAN configuration parameters:
+CONFIGURE CONTROLFILE AUTOBACKUP FORMAT FOR DEVICE TYPE DISK TO '/nfs/backup/orcl/%F';
+new RMAN configuration parameters:
+CONFIGURE CONTROLFILE AUTOBACKUP FORMAT FOR DEVICE TYPE DISK TO '/nfs/backup/orcl/%F';
+new RMAN configuration parameters are successfully stored
+
+
+RMAN> CONFIGURE SNAPSHOT CONTROLFILE NAME TO '/nfs/backup/orcl/snapcf_orcl.f';
+old RMAN configuration parameters:
+CONFIGURE SNAPSHOT CONTROLFILE NAME TO '/nfs/backup/orcl/snapcf_orcl.f';
+new RMAN configuration parameters:
+CONFIGURE SNAPSHOT CONTROLFILE NAME TO '/nfs/backup/orcl/snapcf_orcl.f';
+new RMAN configuration parameters are successfully stored
+
+
+RMAN> EXIT
+
+
+Recovery Manager complete.
+2016-11-08 21:53:27,304 DEBUG    orcl            RMAN execution time 0:00:03.096035
+2016-11-08 21:53:27,305 DEBUG    orcl            RMAN execution successful
+2016-11-08 21:53:27,305 INFO     orcl            Running additional configuration from SQL*Plus
+2016-11-08 21:53:27,306 DEBUG    orcl            SQL*Plus execution starts
+SQL> select instance_name, host_name, version, status, database_status from v$instance;
+
+INSTANCE_NAME    HOST_NAME                VERSION    STATUS       DATABASE_STATUS
+---------------- ------------------------ ---------- ------------ -----------------
+orcl             backup                   12.1.0.2.0 OPEN         ACTIVE
+
+1 row selected.
+
+Elapsed: 00:00:00.01
+SQL> set pages 0
+SQL> select user from dual;
+SYS
+
+1 row selected.
+
+Elapsed: 00:00:00.01
+SQL> -- Block change tracking
+SQL> declare
+  2  i number;
+  3  j number;
+  4  begin
+  5  select count(*) into i from V$BLOCK_CHANGE_TRACKING where status='DISABLED';
+  6  select count(*) into j from v$version where banner like '%Enterprise Edition%';
+  7  if (i = 1) and (j > 0) then
+  8  execute immediate 'alter database enable block change tracking';
+  9  else
+ 10  dbms_output.put_line('BCT already enabled or database is not EE');
+ 11  end if;
+ 12  end;
+ 13  /
+BCT already enabled or database is not EE
+
+PL/SQL procedure successfully completed.
+
+Elapsed: 00:00:00.00
+SQL> -- Archivelog destination
+SQL> declare
+  2  cnt number;
+  3  s varchar2(60);
+  4  l varchar2(100):= '/nfs/backup/orcl/archivelog/';
+  5  function min_param return varchar2 is
+  6  v varchar2(50);
+  7  begin
+  8  select min(name) into v from v$parameter where name like 'log\_archive\_dest\__'  escape '\' and value is null;
+  9  return v;
+ 10  end;
+ 11  begin
+ 12  select count(*) into cnt from v$parameter where name like 'log\_archive\_dest\__'  escape '\' and upper(value) like 'LOCATION%=%USE_DB_RECOVERY_FILE_DEST%';
+ 13  if cnt=0 then
+ 14  s:= min_param;
+ 15  dbms_output.put_line('Setting '||s||' to USE_DB_RECOVERY_FILE_DEST');
+ 16  execute immediate 'alter system set '||s||q'[='LOCATION=USE_DB_RECOVERY_FILE_DEST MANDATORY' scope=both]';
+ 17  execute immediate 'alter system set '||replace(s, 'log_archive_dest_', 'log_archive_dest_state_')||'=enable scope=both';
+ 18  end if;
+ 19  select count(*) into cnt from v$parameter where name like 'log\_archive\_dest\__'  escape '\' and value like '%'||l||'%';
+ 20  if cnt=0 then
+ 21  s:= min_param;
+ 22  dbms_output.put_line('Setting '||s||' to '||l);
+ 23  l:= q'['LOCATION=]'||l||q'[ VALID_FOR=(ONLINE_LOGFILE,PRIMARY_ROLE)']';
+ 24  execute immediate 'alter system set '||s||'='||l||' scope=both';
+ 25  execute immediate 'alter system set '||replace(s, 'log_archive_dest_', 'log_archive_dest_state_')||'=enable scope=both';
+ 26  end if;
+ 27  end;
+ 28  /
+
+PL/SQL procedure successfully completed.
+
+Elapsed: 00:00:00.02
+SQL> spool off
+2016-11-08 21:53:27,561 DEBUG    orcl            SQL*Plus execution successful

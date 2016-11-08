@@ -1,0 +1,376 @@
+2016-11-08 21:53:35,592 DEBUG    orcl            Oracle home: /u01/app/oracle/product/12.1.0.2/db
+2016-11-08 21:53:35,642 INFO     orcl            Configuration file: /home/oracle/oracle-imagecopy-backup/backup.cfg
+2016-11-08 21:53:35,650 INFO     orcl            Check if there are missing archivelogs
+2016-11-08 21:53:35,651 DEBUG    orcl            SQL*Plus execution starts
+
+INSTANCE_NAME    HOST_NAME                VERSION    STATUS       DATABASE_STATUS
+---------------- ------------------------ ---------- ------------ -----------------
+orcl             backup                   12.1.0.2.0 OPEN         ACTIVE
+
+1 row selected.
+
+Elapsed: 00:00:00.00
+SYS
+
+1 row selected.
+
+Elapsed: 00:00:00.00
+
+no rows selected
+
+Elapsed: 00:00:00.03
+2016-11-08 21:53:35,810 DEBUG    orcl            SQL*Plus execution successful
+2016-11-08 21:53:35,811 INFO     orcl            Switch current log
+2016-11-08 21:53:35,812 DEBUG    orcl            SQL*Plus execution starts
+
+INSTANCE_NAME    HOST_NAME                VERSION    STATUS       DATABASE_STATUS
+---------------- ------------------------ ---------- ------------ -----------------
+orcl             backup                   12.1.0.2.0 OPEN         ACTIVE
+
+1 row selected.
+
+Elapsed: 00:00:00.00
+SYS
+
+1 row selected.
+
+Elapsed: 00:00:00.00
+CURRENT DATABASE TIME: 2016-11-08 21:53:35
+CURRENT DATABASE SCN: 799175
+BCT FILE: /u01/app/oracle/oradata/ORCL/changetracking/o1_mf_cn8pwrjs_.chg
+
+3 rows selected.
+
+Elapsed: 00:00:00.01
+
+PL/SQL procedure successfully completed.
+
+Elapsed: 00:00:01.00
+
+System altered.
+
+Elapsed: 00:00:00.06
+2016-11-08 21:53:36,952 DEBUG    orcl            SQL*Plus execution successful
+2016-11-08 21:53:36,956 INFO     orcl            Snap the current backup area
+2016-11-08 21:53:36,957 DEBUG    orcl            Sending POST to pools/pool1/projects/demo-backup/filesystems/orcl/snapshots
+2016-11-08 21:53:37,019 DEBUG    orcl            Return code: 201
+2016-11-08 21:53:37,020 DEBUG    orcl            Created snapshot: orcl-20161108T215336
+2016-11-08 21:53:37,020 INFO     orcl            Checking for expired datafile copies
+2016-11-08 21:53:37,021 DEBUG    orcl            SQL*Plus execution starts
+
+INSTANCE_NAME    HOST_NAME                VERSION    STATUS       DATABASE_STATUS
+---------------- ------------------------ ---------- ------------ -----------------
+orcl             backup                   12.1.0.2.0 OPEN         ACTIVE
+
+1 row selected.
+
+Elapsed: 00:00:00.00
+SYS
+
+1 row selected.
+
+Elapsed: 00:00:00.00
+
+no rows selected
+
+Elapsed: 00:00:00.02
+2016-11-08 21:53:37,112 DEBUG    orcl            SQL*Plus execution successful
+2016-11-08 21:53:37,113 INFO     orcl            Refresh imagecopy
+2016-11-08 21:53:37,114 DEBUG    orcl            RMAN execution starts
+
+Recovery Manager: Release 12.1.0.2.0 - Production on Tue Nov 8 21:53:37 2016
+
+Copyright (c) 1982, 2014, Oracle and/or its affiliates.  All rights reserved.
+
+RMAN> 
+echo set on
+
+RMAN> CONNECT TARGET *
+connected to target database: ORCL (DBID=1433672784)
+
+RMAN> run {
+2> backup incremental level 1 for recover of copy with tag 'image_copy_backup' database;
+3> recover copy of database with tag 'image_copy_backup';
+4> delete noprompt backupset tag 'image_copy_backup';
+5> delete noprompt force archivelog until time 'sysdate-2';
+6> backup spfile tag 'image_copy_backup';
+7> backup current controlfile format '/nfs/backup/orcl/after_backup_controlfile.cf' reuse tag 'image_copy_backup';
+8> delete noprompt obsolete recovery window of 2 days;
+9> show all;
+10> }
+Starting backup at 2016-11-08 21:53:37
+using target database control file instead of recovery catalog
+allocated channel: ORA_DISK_1
+channel ORA_DISK_1: SID=46 device type=DISK
+allocated channel: ORA_DISK_2
+channel ORA_DISK_2: SID=51 device type=DISK
+allocated channel: ORA_DISK_3
+channel ORA_DISK_3: SID=48 device type=DISK
+allocated channel: ORA_DISK_4
+channel ORA_DISK_4: SID=60 device type=DISK
+channel ORA_DISK_1: starting incremental level 1 datafile backup set
+channel ORA_DISK_1: specifying datafile(s) in backup set
+input datafile file number=00001 name=/u01/app/oracle/oradata/ORCL/datafile/o1_mf_system_cfvpb0o0_.dbf
+channel ORA_DISK_1: starting piece 1 at 2016-11-08 21:53:39
+channel ORA_DISK_2: starting incremental level 1 datafile backup set
+channel ORA_DISK_2: specifying datafile(s) in backup set
+input datafile file number=00002 name=/u01/app/oracle/oradata/ORCL/datafile/o1_mf_sysaux_cfvpb3ph_.dbf
+channel ORA_DISK_2: starting piece 1 at 2016-11-08 21:53:39
+channel ORA_DISK_3: starting incremental level 1 datafile backup set
+channel ORA_DISK_3: specifying datafile(s) in backup set
+input datafile file number=00003 name=/u01/app/oracle/oradata/ORCL/datafile/o1_mf_undotbs1_cfvpb5hx_.dbf
+channel ORA_DISK_3: starting piece 1 at 2016-11-08 21:53:39
+channel ORA_DISK_4: starting incremental level 1 datafile backup set
+channel ORA_DISK_4: specifying datafile(s) in backup set
+input datafile file number=00004 name=/u01/app/oracle/oradata/ORCL/datafile/o1_mf_users_cfvpbkmx_.dbf
+channel ORA_DISK_4: starting piece 1 at 2016-11-08 21:53:39
+channel ORA_DISK_1: finished piece 1 at 2016-11-08 21:53:42
+piece handle=/nfs/backup/orcl/6brke9r3_1_1 tag=IMAGE_COPY_BACKUP comment=NONE
+channel ORA_DISK_1: backup set complete, elapsed time: 00:00:03
+channel ORA_DISK_2: finished piece 1 at 2016-11-08 21:53:42
+piece handle=/nfs/backup/orcl/6crke9r3_1_1 tag=IMAGE_COPY_BACKUP comment=NONE
+channel ORA_DISK_2: backup set complete, elapsed time: 00:00:03
+channel ORA_DISK_3: finished piece 1 at 2016-11-08 21:53:42
+piece handle=/nfs/backup/orcl/6drke9r3_1_1 tag=IMAGE_COPY_BACKUP comment=NONE
+channel ORA_DISK_3: backup set complete, elapsed time: 00:00:03
+channel ORA_DISK_4: finished piece 1 at 2016-11-08 21:53:42
+piece handle=/nfs/backup/orcl/6erke9r3_1_1 tag=IMAGE_COPY_BACKUP comment=NONE
+channel ORA_DISK_4: backup set complete, elapsed time: 00:00:03
+Finished backup at 2016-11-08 21:53:42
+
+Starting recover at 2016-11-08 21:53:43
+using channel ORA_DISK_1
+using channel ORA_DISK_2
+using channel ORA_DISK_3
+using channel ORA_DISK_4
+channel ORA_DISK_1: starting incremental datafile backup set restore
+channel ORA_DISK_1: specifying datafile copies to recover
+recovering datafile copy file number=00001 name=/nfs/backup/orcl/data_D-ORCL_I-1433672784_TS-SYSTEM_FNO-1_3tr6dcnn
+channel ORA_DISK_1: reading from backup piece /nfs/backup/orcl/6brke9r3_1_1
+channel ORA_DISK_2: starting incremental datafile backup set restore
+channel ORA_DISK_2: specifying datafile copies to recover
+recovering datafile copy file number=00002 name=/nfs/backup/orcl/data_D-ORCL_I-1433672784_TS-SYSAUX_FNO-2_3ur6dcnn
+channel ORA_DISK_2: reading from backup piece /nfs/backup/orcl/6crke9r3_1_1
+channel ORA_DISK_3: starting incremental datafile backup set restore
+channel ORA_DISK_3: specifying datafile copies to recover
+recovering datafile copy file number=00003 name=/nfs/backup/orcl/data_D-ORCL_I-1433672784_TS-UNDOTBS1_FNO-3_3vr6dcog
+channel ORA_DISK_3: reading from backup piece /nfs/backup/orcl/6drke9r3_1_1
+channel ORA_DISK_4: starting incremental datafile backup set restore
+channel ORA_DISK_4: specifying datafile copies to recover
+recovering datafile copy file number=00004 name=/nfs/backup/orcl/data_D-ORCL_I-1433672784_TS-USERS_FNO-4_40r6dcok
+channel ORA_DISK_4: reading from backup piece /nfs/backup/orcl/6erke9r3_1_1
+channel ORA_DISK_1: piece handle=/nfs/backup/orcl/6brke9r3_1_1 tag=IMAGE_COPY_BACKUP
+channel ORA_DISK_1: restored backup piece 1
+channel ORA_DISK_1: restore complete, elapsed time: 00:00:01
+channel ORA_DISK_2: piece handle=/nfs/backup/orcl/6crke9r3_1_1 tag=IMAGE_COPY_BACKUP
+channel ORA_DISK_2: restored backup piece 1
+channel ORA_DISK_2: restore complete, elapsed time: 00:00:01
+channel ORA_DISK_3: piece handle=/nfs/backup/orcl/6drke9r3_1_1 tag=IMAGE_COPY_BACKUP
+channel ORA_DISK_3: restored backup piece 1
+channel ORA_DISK_3: restore complete, elapsed time: 00:00:01
+channel ORA_DISK_4: piece handle=/nfs/backup/orcl/6erke9r3_1_1 tag=IMAGE_COPY_BACKUP
+channel ORA_DISK_4: restored backup piece 1
+channel ORA_DISK_4: restore complete, elapsed time: 00:00:01
+Finished recover at 2016-11-08 21:53:45
+
+Starting Control File and SPFILE Autobackup at 2016-11-08 21:53:45
+piece handle=/nfs/backup/orcl/c-1433672784-20161108-02 comment=NONE
+Finished Control File and SPFILE Autobackup at 2016-11-08 21:53:46
+
+using channel ORA_DISK_1
+using channel ORA_DISK_2
+using channel ORA_DISK_3
+using channel ORA_DISK_4
+
+List of Backup Pieces
+BP Key  BS Key  Pc# Cp# Status      Device Type Piece Name
+------- ------- --- --- ----------- ----------- ----------
+145     145     1   1   AVAILABLE   DISK        /nfs/backup/orcl/68rke9n5_1_1
+146     146     1   1   AVAILABLE   DISK        /nfs/backup/orcl/after_backup_controlfile.cf
+148     148     1   1   AVAILABLE   DISK        /nfs/backup/orcl/6drke9r3_1_1
+149     149     1   1   AVAILABLE   DISK        /nfs/backup/orcl/6erke9r3_1_1
+150     150     1   1   AVAILABLE   DISK        /nfs/backup/orcl/6crke9r3_1_1
+151     151     1   1   AVAILABLE   DISK        /nfs/backup/orcl/6brke9r3_1_1
+deleted backup piece
+backup piece handle=/nfs/backup/orcl/68rke9n5_1_1 RECID=145 STAMP=927409893
+deleted backup piece
+backup piece handle=/nfs/backup/orcl/after_backup_controlfile.cf RECID=146 STAMP=927409895
+deleted backup piece
+backup piece handle=/nfs/backup/orcl/6drke9r3_1_1 RECID=148 STAMP=927410020
+deleted backup piece
+backup piece handle=/nfs/backup/orcl/6erke9r3_1_1 RECID=149 STAMP=927410020
+deleted backup piece
+backup piece handle=/nfs/backup/orcl/6crke9r3_1_1 RECID=150 STAMP=927410020
+deleted backup piece
+backup piece handle=/nfs/backup/orcl/6brke9r3_1_1 RECID=151 STAMP=927410020
+Deleted 6 objects
+
+
+released channel: ORA_DISK_1
+released channel: ORA_DISK_2
+released channel: ORA_DISK_3
+released channel: ORA_DISK_4
+allocated channel: ORA_DISK_1
+channel ORA_DISK_1: SID=46 device type=DISK
+allocated channel: ORA_DISK_2
+channel ORA_DISK_2: SID=51 device type=DISK
+allocated channel: ORA_DISK_3
+channel ORA_DISK_3: SID=48 device type=DISK
+allocated channel: ORA_DISK_4
+channel ORA_DISK_4: SID=60 device type=DISK
+specification does not match any archived log in the repository
+
+Starting backup at 2016-11-08 21:53:48
+using channel ORA_DISK_1
+using channel ORA_DISK_2
+using channel ORA_DISK_3
+using channel ORA_DISK_4
+channel ORA_DISK_1: starting full datafile backup set
+channel ORA_DISK_1: specifying datafile(s) in backup set
+including current SPFILE in backup set
+channel ORA_DISK_1: starting piece 1 at 2016-11-08 21:53:48
+channel ORA_DISK_1: finished piece 1 at 2016-11-08 21:53:49
+piece handle=/nfs/backup/orcl/6grke9rc_1_1 tag=IMAGE_COPY_BACKUP comment=NONE
+channel ORA_DISK_1: backup set complete, elapsed time: 00:00:01
+Finished backup at 2016-11-08 21:53:49
+
+Starting backup at 2016-11-08 21:53:49
+using channel ORA_DISK_1
+using channel ORA_DISK_2
+using channel ORA_DISK_3
+using channel ORA_DISK_4
+channel ORA_DISK_1: starting full datafile backup set
+channel ORA_DISK_1: specifying datafile(s) in backup set
+including current control file in backup set
+channel ORA_DISK_1: starting piece 1 at 2016-11-08 21:53:50
+channel ORA_DISK_1: finished piece 1 at 2016-11-08 21:53:51
+piece handle=/nfs/backup/orcl/after_backup_controlfile.cf tag=IMAGE_COPY_BACKUP comment=NONE
+channel ORA_DISK_1: backup set complete, elapsed time: 00:00:01
+Finished backup at 2016-11-08 21:53:51
+
+Starting Control File and SPFILE Autobackup at 2016-11-08 21:53:51
+piece handle=/nfs/backup/orcl/c-1433672784-20161108-03 comment=NONE
+Finished Control File and SPFILE Autobackup at 2016-11-08 21:53:52
+
+using channel ORA_DISK_1
+using channel ORA_DISK_2
+using channel ORA_DISK_3
+using channel ORA_DISK_4
+no obsolete backups found
+
+RMAN configuration parameters for database with db_unique_name ORCL are:
+CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 2 DAYS;
+CONFIGURE BACKUP OPTIMIZATION ON;
+CONFIGURE DEFAULT DEVICE TYPE TO DISK;
+CONFIGURE CONTROLFILE AUTOBACKUP ON;
+CONFIGURE CONTROLFILE AUTOBACKUP FORMAT FOR DEVICE TYPE DISK TO '/nfs/backup/orcl/%F';
+CONFIGURE DEVICE TYPE DISK PARALLELISM 4 BACKUP TYPE TO BACKUPSET;
+CONFIGURE DATAFILE BACKUP COPIES FOR DEVICE TYPE DISK TO 1; # default
+CONFIGURE ARCHIVELOG BACKUP COPIES FOR DEVICE TYPE DISK TO 1; # default
+CONFIGURE CHANNEL DEVICE TYPE DISK FORMAT   '/nfs/backup/orcl/%U';
+CONFIGURE MAXSETSIZE TO UNLIMITED; # default
+CONFIGURE ENCRYPTION FOR DATABASE OFF; # default
+CONFIGURE ENCRYPTION ALGORITHM 'AES128'; # default
+CONFIGURE COMPRESSION ALGORITHM 'BASIC' AS OF RELEASE 'DEFAULT' OPTIMIZE FOR LOAD TRUE ; # default
+CONFIGURE RMAN OUTPUT TO KEEP FOR 7 DAYS; # default
+CONFIGURE ARCHIVELOG DELETION POLICY TO NONE;
+CONFIGURE SNAPSHOT CONTROLFILE NAME TO '/nfs/backup/orcl/snapcf_orcl.f';
+
+
+RMAN> 
+
+RMAN> EXIT
+
+
+Recovery Manager complete.
+2016-11-08 21:53:54,134 DEBUG    orcl            RMAN execution time 0:00:17.007102
+2016-11-08 21:53:54,136 DEBUG    orcl            RMAN execution successful
+2016-11-08 21:53:54,137 DEBUG    orcl            SQL*Plus execution starts
+SQL> select instance_name, host_name, version, status, database_status from v$instance;
+
+INSTANCE_NAME    HOST_NAME                VERSION    STATUS       DATABASE_STATUS
+---------------- ------------------------ ---------- ------------ -----------------
+orcl             backup                   12.1.0.2.0 OPEN         ACTIVE
+
+1 row selected.
+
+Elapsed: 00:00:00.01
+SQL> set pages 0
+SQL> select user from dual;
+SYS
+
+1 row selected.
+
+Elapsed: 00:00:00.00
+SQL> select 'CURRENT DATABASE TIME: '||to_char(sysdate, 'yyyy-mm-dd hh24:mi:ss') from dual union all
+  2  select 'CURRENT DATABASE SCN: '||to_char(current_scn) from v$database union all
+  3  select 'BCT FILE: '||filename from v$block_change_tracking;
+CURRENT DATABASE TIME: 2016-11-08 21:53:54
+CURRENT DATABASE SCN: 799393
+BCT FILE: /u01/app/oracle/oradata/ORCL/changetracking/o1_mf_cn8pwrjs_.chg
+
+3 rows selected.
+
+Elapsed: 00:00:00.01
+SQL> exec dbms_lock.sleep(1);
+
+PL/SQL procedure successfully completed.
+
+Elapsed: 00:00:01.00
+SQL> alter system archive log current;
+
+System altered.
+
+Elapsed: 00:00:00.06
+SQL> spool off
+2016-11-08 21:53:55,455 DEBUG    orcl            SQL*Plus execution successful
+2016-11-08 21:53:55,456 INFO     orcl            Clean expired snapshots
+2016-11-08 21:53:55,457 DEBUG    orcl            Sending GET to pools/pool1/projects/demo-backup/filesystems/orcl/snapshots
+2016-11-08 21:53:55,589 DEBUG    orcl            Return code: 200
+2016-11-08 21:53:55,592 DEBUG    orcl            orcl-20160524T155205 [2016-05-24 13:52:05 UTC] total=165MB unique=276kB clones=0 valid
+2016-11-08 21:53:55,593 DEBUG    orcl            orcl-20161017T093914 [2016-10-17 07:39:14 UTC] total=177MB unique=138kB clones=0 valid
+2016-11-08 21:53:55,593 DEBUG    orcl            orcl-20161017T100501 [2016-10-17 08:05:01 UTC] total=181MB unique=138kB clones=0 valid
+2016-11-08 21:53:55,593 DEBUG    orcl            orcl-20161017T134819 [2016-10-17 11:48:20 UTC] total=175MB unique=146kB clones=0 valid
+2016-11-08 21:53:55,594 DEBUG    orcl            orcl-20161017T134956 [2016-10-17 11:49:56 UTC] total=175MB unique=230kB clones=0 valid
+2016-11-08 21:53:55,594 DEBUG    orcl            orcl-20161017T135058 [2016-10-17 11:50:58 UTC] total=175MB unique=862kB clones=0 valid
+2016-11-08 21:53:55,594 DEBUG    orcl            orcl-20161020T123147 [2016-10-20 10:43:24 UTC] total=204MB unique=22MB clones=0 valid
+2016-11-08 21:53:55,595 DEBUG    orcl            orcl-20161108T215112 [2016-11-08 20:51:12 UTC] total=207MB unique=39MB clones=0 valid
+2016-11-08 21:53:55,595 DEBUG    orcl            orcl-20161108T215336 [2016-11-08 20:53:36 UTC] total=176MB unique=292kB clones=0 valid
+2016-11-08 21:53:58,719 DEBUG    orcl            == Database configuration ==
+****Unable to retrieve Oracle Clusterware home.
+Start Oracle Clusterware stack and try again.
+
+== Service configuration ==
+****Unable to retrieve Oracle Clusterware home.
+Start Oracle Clusterware stack and try again.
+
+== Service configuration parsed ==
+
+2016-11-08 21:53:58,720 INFO     orcl            Write database parameters for autorestore
+2016-11-08 21:53:58,724 DEBUG    orcl            SQL*Plus execution starts
+
+INSTANCE_NAME    HOST_NAME                VERSION    STATUS       DATABASE_STATUS
+---------------- ------------------------ ---------- ------------ -----------------
+orcl             backup                   12.1.0.2.0 OPEN         ACTIVE
+
+1 row selected.
+
+Elapsed: 00:00:00.00
+SYS
+
+1 row selected.
+
+Elapsed: 00:00:00.00
+dbconfig-db_block_size: 8192
+dbconfig-compatible: 12.1.0.2.0
+dbconfig-db_files: 200
+dbconfig-undo_tablespace: UNDOTBS1
+dbconfig-db_name: orcl
+dbconfig-enable_pluggable_database: FALSE
+dbconfig-backup-finished: 2016-11-08 21:53:58
+Elapsed: 00:00:00.01
+2016-11-08 21:53:58,803 DEBUG    orcl            SQL*Plus execution successful
+2016-11-08 21:53:58,805 INFO     orcl            ------------ TOTAL ------------
+2016-11-08 21:53:58,806 INFO     orcl            Total execution time: 0:00:23.155297
+2016-11-08 21:53:58,807 INFO     orcl            Execution started: 2016-11-08 21:53:35.650323
+2016-11-08 21:53:58,808 INFO     orcl            Execution finished: 2016-11-08 21:53:58.805620
