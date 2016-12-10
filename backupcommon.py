@@ -59,7 +59,7 @@ class Configuration:
   _defaults = {'registercatalog': 'false', 'hasdataguard': 'false',
                'dosnapshot': 'true', 'gimanaged': 'true',
                'schedulebackup': 'FREQ=DAILY', 'schedulearchlog': 'FREQ=HOURLY;INTERVAL=6',
-               'snapexpirationmonths': 0}
+               'snapexpirationmonths': 0, 'backupjobenabled': 'true'}
 
   @classmethod
   def getconfigname(cls):

@@ -66,7 +66,8 @@ Configuration.substitutions.update({ 'recoverywindow': Configuration.get('recove
                   'dbid': int(Configuration.get('dbid')),
                   'oraclehome': oraclehome,
                   'tnspath': OracleExec.tnspath,
-                  'logfile': logfile
+                  'logfile': logfile,
+                  'backupjobenabled': 'true' if Configuration.get('backupjobenabled').upper() == 'TRUE' else 'false'
                 })
 
 # Read RMAN templates
