@@ -33,10 +33,10 @@ def exec_sqlplus(oraexec, script, header = 'sqlplusheader'):
 def process_database(dbname):
     Configuration.defaultsection = dbname
     Configuration.substitutions.update({'dbname': dbname})
-    oraexec = OracleExec(oraclehome=Configuration.get('oraclehome', 'generic'), tnspath=os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic')))
+    oraexec = OracleExec(oraclehome=Configuration.get('oraclehome', 'generic'), tnspath=os.path.join(scriptpath, Configuration.get('tnsadmin', 'generic')))
     # Read job status information from the database
     jobinfo = {}
-    for line in exec_sqlplus(reporttemplate.get('jobstatus')):
+    for line in exec_sqlplus(oraexec, reporttemplate.get('jobstatus')):
         j = json.loads(line)
         if j["type"] == "job":
             if j["job_name"] == "ARCHLOGBACKUP_JOB":

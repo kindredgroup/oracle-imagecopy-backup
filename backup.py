@@ -49,7 +49,7 @@ BackupLogger.init(logfile, configsection)
 BackupLogger.clean()
 
 # Oracle environment variables
-oraexec = OracleExec(Configuration.get('oraclehome', 'generic'), os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic')))
+oraexec = OracleExec(Configuration.get('oraclehome', 'generic'), os.path.join(scriptpath, Configuration.get('tnsadmin', 'generic')))
 
 # Prepare a dictionary of all possible template substitutions
 Configuration.substitutions.update({ 'recoverywindow': Configuration.get('recoverywindow'),

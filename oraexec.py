@@ -2,6 +2,7 @@ import os, sys
 from subprocess import Popen, PIPE
 from backupcommon import BackupLogger, info, debug, error, exception
 from datetime import datetime, timedelta
+from tempfile import mkstemp, TemporaryFile
 
 class OracleExec(object):
     oraclehome = None
@@ -38,7 +39,7 @@ class OracleExec(object):
         else:
             debug("RMAN execution successful")
 
-    def sqlplus(cls, finalscript, silent=False):
+    def sqlplus(self, finalscript, silent=False):
         self._setenv()
         with TemporaryFile() as f:
             args = [os.path.join(self.oraclehome, 'bin', 'sqlplus')]
@@ -59,7 +60,7 @@ class OracleExec(object):
                 f.seek(0,0)
                 return f.read()
 
-    def sqlldr(cls, login, finalscript):
+    def sqlldr(self, login, finalscript):
         self._setenv()
         debug("SQLLDR execution starts")
         f1 = mkstemp(suffix=".ctl")
