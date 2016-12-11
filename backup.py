@@ -49,8 +49,7 @@ BackupLogger.init(logfile, configsection)
 BackupLogger.clean()
 
 # Oracle environment variables
-oraclehome = Configuration.get('oraclehome', 'generic')
-oraexec = OracleExec(oraclehome, os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic')))
+oraexec = OracleExec(Configuration.get('oraclehome', 'generic'), os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic')))
 
 # Prepare a dictionary of all possible template substitutions
 Configuration.substitutions.update({ 'recoverywindow': Configuration.get('recoverywindow'),
@@ -65,7 +64,7 @@ Configuration.substitutions.update({ 'recoverywindow': Configuration.get('recove
                   'schedulebackup': Configuration.get('schedulebackup'),
                   'schedulearchlog': Configuration.get('schedulearchlog'),
                   'dbid': int(Configuration.get('dbid')),
-                  'oraclehome': oraclehome,
+                  'oraclehome': oraexec.oraclehome,
                   'tnspath': oraexec.tnspath,
                   'logfile': logfile,
                   'backupjobenabled': 'true' if Configuration.get('backupjobenabled').upper() == 'TRUE' else 'false'
