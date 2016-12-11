@@ -7,15 +7,20 @@ from tempfile import mkstemp, TemporaryFile
 class OracleExec(object):
     oraclehome = None
     tnspath = None
+    oraclesid = None
 
-    def __init__(self, oraclehome, tnspath):
+    def __init__(self, oraclehome, tnspath, sid=None):
         self.oraclehome = oraclehome
         self.tnspath = tnspath
+        if sid is not None:
+            self.oraclesid = sid
         debug("Oracle home: %s" % self.oraclehome)
 
     def _setenv(self):
-        if os.environ.get('ORACLE_SID'):
+        if self.oraclesid is None and os.environ.get('ORACLE_SID'):
             del os.environ['ORACLE_SID']
+        if self.oraclesid is not None:
+            os.environ['ORACLE_SID'] = self.oraclesid
         os.environ['ORACLE_HOME'] = self.oraclehome
         os.environ['NLS_DATE_FORMAT'] = 'yyyy-mm-dd hh24:mi:ss'
         os.environ['TNS_ADMIN'] = self.tnspath

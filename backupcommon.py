@@ -9,214 +9,214 @@ from string import Template
 
 # Directory where the executable script is located
 def scriptpath():
-  scriptpath = os.path.dirname(os.path.realpath(__file__))
-  return scriptpath
+    scriptpath = os.path.dirname(os.path.realpath(__file__))
+    return scriptpath
 
 def getconfigname():
-  return Configuration.getconfigname()
+    return Configuration.getconfigname()
 
 def info(msg):
-  if BackupLogger.log is not None:
-    BackupLogger.log.info(msg)
+    if BackupLogger.log is not None:
+      BackupLogger.log.info(msg)
 
 def debug(msg):
-  if BackupLogger.log is not None:
-    BackupLogger.log.debug(msg)
+    if BackupLogger.log is not None:
+        BackupLogger.log.debug(msg)
 
 def error(msg):
-  if BackupLogger.log is not None:
-    BackupLogger.log.error(msg)
+    if BackupLogger.log is not None:
+        BackupLogger.log.error(msg)
 
 def exception(msg):
-  if BackupLogger.log is not None:
-    BackupLogger.log.exception(msg)
+    if BackupLogger.log is not None:
+        BackupLogger.log.exception(msg)
 
 def size2str(size):
-  # Number of bytes to human readable string
-  sint = int(size)
-  if sint >= 1099511627776:
-    return "%dTB" % round(sint/1099511627776)
-  elif sint >= 1073741824:
-    return "%dGB" % round(sint/1073741824)
-  elif sint >= 1048576:
-    return "%dMB" % round(sint/1048576)
-  elif sint >= 1024:
-    return "%dkB" % round(sint/1024)
-  else:
-    return "%dB" % sint
+    # Number of bytes to human readable string
+    sint = int(size)
+    if sint >= 1099511627776:
+        return "%dTB" % round(sint/1099511627776)
+    elif sint >= 1073741824:
+        return "%dGB" % round(sint/1073741824)
+    elif sint >= 1048576:
+        return "%dMB" % round(sint/1048576)
+    elif sint >= 1024:
+        return "%dkB" % round(sint/1024)
+    else:
+        return "%dB" % sint
 
 def create_snapshot_class(configsection):
-  snapclassname = Configuration.get('snapperclass', 'generic')
-  snapmod = __import__(Configuration.get('snappermodule', 'generic'), globals(), locals(), [snapclassname])
-  snapclass = getattr(snapmod, snapclassname)
-  return snapclass(configsection)
+    snapclassname = Configuration.get('snapperclass', 'generic')
+    snapmod = __import__(Configuration.get('snappermodule', 'generic'), globals(), locals(), [snapclassname])
+    snapclass = getattr(snapmod, snapclassname)
+    return snapclass(configsection)
 
 class Configuration:
-  configfilename = None
-  _config = None
-  substitutions = {}
-  defaultsection = None
-  _defaults = {'registercatalog': 'false', 'hasdataguard': 'false',
-               'dosnapshot': 'true', 'gimanaged': 'true',
-               'schedulebackup': 'FREQ=DAILY', 'schedulearchlog': 'FREQ=HOURLY;INTERVAL=6',
-               'snapexpirationmonths': 0, 'backupjobenabled': 'true'}
+    configfilename = None
+    _config = None
+    substitutions = {}
+    defaultsection = None
+    _defaults = {'registercatalog': 'false', 'hasdataguard': 'false',
+                 'dosnapshot': 'true', 'gimanaged': 'true',
+                 'schedulebackup': 'FREQ=DAILY', 'schedulearchlog': 'FREQ=HOURLY;INTERVAL=6',
+                 'snapexpirationmonths': 0, 'backupjobenabled': 'true'}
 
-  @classmethod
-  def getconfigname(cls):
-    configfile = ""
-    if os.getenv('BACKUPCONFIG'):
-      # Configuration file is supplied by environment variable
-      configfile = os.getenv('BACKUPCONFIG')
-    elif os.path.isfile(os.path.join(scriptpath(), 'backup.cfg')):
-      configfile = 'backup.cfg'
-    return configfile
+    @classmethod
+    def getconfigname(cls):
+        configfile = ""
+        if os.getenv('BACKUPCONFIG'):
+            # Configuration file is supplied by environment variable
+            configfile = os.getenv('BACKUPCONFIG')
+        elif os.path.isfile(os.path.join(scriptpath(), 'backup.cfg')):
+            configfile = 'backup.cfg'
+        return configfile
 
-  @classmethod
-  def init(cls, defaultsection = None, additionaldefaults = None, configfilename = None):
-    if configfilename is None:
-      cls.configfilename = os.path.join(scriptpath(), getconfigname())
-    else:
-      cls.configfilename = os.path.join(scriptpath(), configfilename)
-    if not os.path.isfile(cls.configfilename):
-      raise Exception('configfilenotfound', "Configuration file %s not found" % cls.configfilename)
-    cls.defaultsection = defaultsection
-    if os.getenv('ORACLE_HOME'):
-      cls._defaults.update({'oraclehome': os.getenv('ORACLE_HOME')})
-    if additionaldefaults is not None:
-      cls._defaults.update(additionaldefaults)
-    cls._config = SafeConfigParser(cls._defaults)
-    cls._config.read(cls.configfilename)
-    if not os.getenv('BACKUPCONFIG'):
-      os.environ['BACKUPCONFIG'] = cls.configfilename
+    @classmethod
+    def init(cls, defaultsection = None, additionaldefaults = None, configfilename = None):
+        if configfilename is None:
+            cls.configfilename = os.path.join(scriptpath(), getconfigname())
+        else:
+            cls.configfilename = os.path.join(scriptpath(), configfilename)
+        if not os.path.isfile(cls.configfilename):
+            raise Exception('configfilenotfound', "Configuration file %s not found" % cls.configfilename)
+        cls.defaultsection = defaultsection
+        if os.getenv('ORACLE_HOME'):
+            cls._defaults.update({'oraclehome': os.getenv('ORACLE_HOME')})
+        if additionaldefaults is not None:
+            cls._defaults.update(additionaldefaults)
+        cls._config = SafeConfigParser(cls._defaults)
+        cls._config.read(cls.configfilename)
+        if not os.getenv('BACKUPCONFIG'):
+            os.environ['BACKUPCONFIG'] = cls.configfilename
 
-  @classmethod
-  def sections(cls):
-    return cls._config.sections()
+    @classmethod
+    def sections(cls):
+        return cls._config.sections()
 
-  @classmethod
-  def get(cls, parameter, section=None):
-    if section is not None:
-      try:
-        return cls._config.get(cls.defaultsection, "%s%s" % (section, parameter))
-      except:
-        return cls._config.get(section, parameter)
-    else:
-      return cls._config.get(cls.defaultsection, parameter)
+    @classmethod
+    def get(cls, parameter, section=None):
+        if section is not None:
+            try:
+                return cls._config.get(cls.defaultsection, "%s%s" % (section, parameter))
+            except:
+                return cls._config.get(section, parameter)
+        else:
+            return cls._config.get(cls.defaultsection, parameter)
 
-  @classmethod
-  def get2(cls, parameter, section=None):
-    s = Template(cls.get(parameter, section))
-    return s.substitute(cls.substitutions)
+    @classmethod
+    def get2(cls, parameter, section=None):
+        s = Template(cls.get(parameter, section))
+        return s.substitute(cls.substitutions)
 
 class BackupTemplate(object):
 
-  def __init__(self, filename):
-    self._configpath = os.path.join(scriptpath(), filename)
-    if not os.path.isfile(self._configpath):
-      raise Exception('templatefilenotfound', "Template file %s not found" % self._configpath)
-    self._config = SafeConfigParser()
-    self._config.read(self._configpath)
+    def __init__(self, filename):
+        self._configpath = os.path.join(scriptpath(), filename)
+        if not os.path.isfile(self._configpath):
+            raise Exception('templatefilenotfound', "Template file %s not found" % self._configpath)
+        self._config = SafeConfigParser()
+        self._config.read(self._configpath)
 
-  def get(self, entry):
-    s = Template(self._config.get('template', entry))
-    return s.substitute(Configuration.substitutions)
+    def get(self, entry):
+        s = Template(self._config.get('template', entry))
+        return s.substitute(Configuration.substitutions)
 
 class BackupLogger:
-  log = None
-  logfile = None
-  _logdir = None
-  config = None
-  _cleaned = False
+    log = None
+    logfile = None
+    _logdir = None
+    config = None
+    _cleaned = False
 
-  @classmethod
-  def init(cls, logfile=None, config=None):
-    # Initialize/reinitialize all loggers
-    if config is not None:
-      cls.config = config
-      if cls.log is not None:
-        cls.close(True)
-        del cls.log
-        cls.log = None
-    if logfile is not None:
-      cls.logfile = logfile
-      cls._logdir = os.path.dirname(cls.logfile)
-      if not os.path.exists(cls._logdir):
-        os.makedirs(cls._logdir)
-    if cls.log is None:
-      cls.log = logging.getLogger(config)
-      cls.log.setLevel(logging.DEBUG)
-      streamformatter = logging.Formatter('%(asctime)s %(levelname)-8s %(name)-15s %(message)s', '%H:%M:%S')
-      mystream = logging.StreamHandler(sys.stdout)
-      mystream.setFormatter(streamformatter)
-      mystream.setLevel(logging.INFO)
-      cls.log.addHandler(mystream)
-    myformatter = logging.Formatter('%(asctime)s %(levelname)-8s %(name)-15s %(message)s')
-    myhandler = logging.FileHandler(cls.logfile)
-    myhandler.setFormatter(myformatter)
-    cls.log.addHandler(myhandler)
-
-  @classmethod
-  def close(cls, closeall=False):
-    # This just closes the FileHandlers so we could write to the log file from rman/sqlplus directly
-    handlers = cls.log.handlers[:]
-    for handler in handlers:
-      if closeall or handler.__class__ is logging.FileHandler:
-        handler.flush()
-        handler.close()
-        cls.log.removeHandler(handler)
-
-  @classmethod
-  def clean(cls):
-    if not cls._cleaned:
-      retentiondays = int(Configuration.get('logretention', 'generic'))
-      # Clear old logfiles
-      for fname in os.listdir(cls._logdir):
-        if fname[-4:] == ".log":
-          fullpath = os.path.join(cls._logdir, fname)
-          if os.path.isfile(fullpath) and ( datetime.now() - datetime.fromtimestamp(os.path.getmtime(fullpath)) > timedelta(days=retentiondays) ):
+    @classmethod
+    def init(cls, logfile=None, config=None):
+        # Initialize/reinitialize all loggers
+        if config is not None:
+            cls.config = config
             if cls.log is not None:
-              cls.log.debug("Removing log: %s" % fullpath)
-            os.remove(fullpath)
-      cls._cleaned = True
+                cls.close(True)
+                del cls.log
+                cls.log = None
+        if logfile is not None:
+            cls.logfile = logfile
+            cls._logdir = os.path.dirname(cls.logfile)
+            if not os.path.exists(cls._logdir):
+                os.makedirs(cls._logdir)
+        if cls.log is None:
+            cls.log = logging.getLogger(config)
+            cls.log.setLevel(logging.DEBUG)
+            streamformatter = logging.Formatter('%(asctime)s %(levelname)-8s %(name)-15s %(message)s', '%H:%M:%S')
+            mystream = logging.StreamHandler(sys.stdout)
+            mystream.setFormatter(streamformatter)
+            mystream.setLevel(logging.INFO)
+            cls.log.addHandler(mystream)
+        myformatter = logging.Formatter('%(asctime)s %(levelname)-8s %(name)-15s %(message)s')
+        myhandler = logging.FileHandler(cls.logfile)
+        myhandler.setFormatter(myformatter)
+        cls.log.addHandler(myhandler)
+
+    @classmethod
+    def close(cls, closeall=False):
+        # This just closes the FileHandlers so we could write to the log file from rman/sqlplus directly
+        handlers = cls.log.handlers[:]
+        for handler in handlers:
+            if closeall or handler.__class__ is logging.FileHandler:
+                handler.flush()
+                handler.close()
+                cls.log.removeHandler(handler)
+
+    @classmethod
+    def clean(cls):
+        if not cls._cleaned:
+            retentiondays = int(Configuration.get('logretention', 'generic'))
+            # Clear old logfiles
+            for fname in os.listdir(cls._logdir):
+                if fname[-4:] == ".log":
+                    fullpath = os.path.join(cls._logdir, fname)
+                    if os.path.isfile(fullpath) and ( datetime.now() - datetime.fromtimestamp(os.path.getmtime(fullpath)) > timedelta(days=retentiondays) ):
+                        if cls.log is not None:
+                            cls.log.debug("Removing log: %s" % fullpath)
+                        os.remove(fullpath)
+            cls._cleaned = True
 
 class BackupLock(object):
 
-  def _createlock(self):
-    if not os.path.exists(self._lockfile):
-      try:
-        os.link(self._tmplockfile, self._lockfile)
-        return True
-      except:
-        info("Getting lock %s failed!" % self._lockfile)
-        return False
-    else:
-      info("Locked! File %s exists." % self._lockfile)
-      return False
+    def _createlock(self):
+        if not os.path.exists(self._lockfile):
+            try:
+                os.link(self._tmplockfile, self._lockfile)
+                return True
+            except:
+                info("Getting lock %s failed!" % self._lockfile)
+                return False
+        else:
+            info("Locked! File %s exists." % self._lockfile)
+            return False
 
-  def __init__(self, lockdir, maxlockwait=30):
-    self._lockfile = os.path.join(lockdir, 'backup.lck')
-    tmpf,self._tmplockfile = mkstemp(suffix='.lck', dir=lockdir)
-    # Add here some more useful information about the locker
-    os.write(tmpf, "%s\n%s\n%d" % (os.uname(), datetime.now().strftime('%Y-%m-%d %H:%M:%S'), os.getpid()) )
-    os.close(tmpf)
-    # Try getting a lock
-    lockstart = datetime.now()
-    locksuccess = False
-    while (datetime.now() - lockstart < timedelta(minutes=maxlockwait)):
-      if self._createlock():
-        locksuccess = True
-        break
-      else:
-        sleep(5)
-    if not locksuccess:
-      error("Did not manage to get the lock in time.")
-      sys.exit(2)
+    def __init__(self, lockdir, maxlockwait=30):
+        self._lockfile = os.path.join(lockdir, 'backup.lck')
+        tmpf,self._tmplockfile = mkstemp(suffix='.lck', dir=lockdir)
+        # Add here some more useful information about the locker
+        os.write(tmpf, "%s\n%s\n%d" % (os.uname(), datetime.now().strftime('%Y-%m-%d %H:%M:%S'), os.getpid()) )
+        os.close(tmpf)
+        # Try getting a lock
+        lockstart = datetime.now()
+        locksuccess = False
+        while (datetime.now() - lockstart < timedelta(minutes=maxlockwait)):
+            if self._createlock():
+                locksuccess = True
+                break
+            else:
+                sleep(5)
+        if not locksuccess:
+            error("Did not manage to get the lock in time.")
+            sys.exit(2)
 
-  def release(self):
-    if os.path.exists(self._lockfile):
-      os.remove(self._lockfile)
-    if os.path.exists(self._tmplockfile):
-      os.remove(self._tmplockfile)
+    def release(self):
+        if os.path.exists(self._lockfile):
+            os.remove(self._lockfile)
+        if os.path.exists(self._tmplockfile):
+            os.remove(self._tmplockfile)
 
 class SnapHandler(object):
   __metaclass__ = ABCMeta
