@@ -1,7 +1,7 @@
 #!/usr/bin/python2
 
 import os, sys
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from backupcommon import BackupLock, BackupLogger, info, debug, error, exception, Configuration, BackupTemplate, scriptpath
 from random import randint
 from oraexec import OracleExec
