@@ -7,7 +7,7 @@ from backupcommon import BackupLock, BackupLogger, info, debug, error, exception
 #from ConfigParser import SafeConfigParser
 #from tempfile import mkstemp, TemporaryFile
 from random import randint
-#from oraexec import OracleExec
+from oraexec import OracleExec
 
 def printhelp():
     print "Usage: autorestore.py <configuration_file_name without directory> [config]"
@@ -36,6 +36,7 @@ Configuration.init('autorestore', configfilename=sys.argv[1], additionaldefaults
     'autorestoreinstancenumber': '1', 'autorestorethread': '1'})
 validatechance = int(Configuration.get('autorestorevalidatechance', 'autorestore'))
 validatemodulus = int(Configuration.get('autorestoremodulus', 'autorestore'))
+oexec = OracleExec(oraclehome=Configuration.get('oraclehome', 'generic'), tnspath=os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic'))
 
 # Does the backup destination exist?
 restoredest = Configuration.get('autorestoredestination','autorestore')
@@ -78,21 +79,18 @@ def validationdate(database):
     next_validation = date.today() + timedelta(days=days_to_next_validation)
     return (validatecorruption, days_to_next_validation, next_validation)
 
-# Orchestrator
-
 def runrestore(database):
     global exitstatus
     #
     Configuration.defaultsection = database
-    restore = RestoreDB(database)
-    restore.set_mount_path(mountdest)
-    restore.set_restore_path(restoredest)
     # Reinitialize logging
     BackupLogger.init(os.path.join(logdir, "%s-%s.log" % (datetime.now().strftime('%Y%m%dT%H%M%S'), database)), database)
     BackupLogger.clean()
     #
-    starttime = datetime.now()
-    info("Starting to restore")
+    restore = RestoreDB(database)
+    restore.set_mount_path(mountdest)
+    restore.set_restore_path(restoredest)
+    #
     info("Logfile: %s" % BackupLogger.logfile)
     Configuration.substitutions.update({
         'logfile': BackupLogger.logfile
@@ -100,7 +98,7 @@ def runrestore(database):
     cleantarget()
     #
     success = False
-    verifyseconds = -1
+    #verifyseconds = -1
     #
     if validatemodulus > 0:
         # Validation based on modulus
@@ -113,49 +111,23 @@ def runrestore(database):
         validatecorruption = (validatechance > 0) and (randint(1, validatechance) == validatechance)
     if validatecorruption:
         debug("Database will be validated during this restore session")
-        restore.do_blockcheck()
+    # Start restore
     try:
         restore.run()
         restore.verify()
-    except:
-        exitstatus = 1
-        exception("Cloning failed, but we continue with the next database.")
-        return
-    try:
-        restore.verify()
         if validatecorruption:
             restore.blockcheck()
-        debug('ACTION: shutdown')
-        exec_sqlplus(restoretemplate.get('shutdown'))
         success = True
     except:
-        # When error happens here, we can try another database
+        exitstatus = 1
         exception("Error happened, but we can continue with the next database.")
+    finally:
+        restore.cleanup()
+        restore.logresult(success)
 
     # Finish up
-    endtime = datetime.now()
-    if not success:
-          exitstatus = 1
-    Configuration.substitutions.update({
-        'log_dbname': database,
-        'log_start': starttime.strftime('%Y-%m-%d %H-%M-%S'),
-        'log_stop': endtime.strftime('%Y-%m-%d %H-%M-%S'),
-        'log_success': '1' if success else '0',
-        'log_diff': verifyseconds,
-        'log_snapid': sourcesnapid,
-        'log_validated': '1' if validatecorruption else '0'
-    })
-    debug('Logging the result to catalog.')
-    try:
-        orclexec.sqlldr(Configuration.get('autorestorecatalog','autorestore'), restoretemplate.get('sqlldrlog'))
-    except:
-        pass
-    try:
-        orclexec.exec_sqlplus(restoretemplate.get('insertlog'), False, returnoutput=True)
-    except:
-        exception("Logging the result to catalog failed.")
-    info("Restore %s, elapsed time: %s" % ('successful' if success else 'failed', endtime-starttime))
     BackupLogger.close(True)
+    info("Restore %s, elapsed time: %s" % ('successful' if success else 'failed', restore.endtime-restore.starttime))
 
 # UI
 
@@ -171,67 +143,63 @@ if len(sys.argv) == 3:
     action = sys.argv[2]
 
 if action == '--listvalidationdates':
-  # This action does not need a lock
-  if validatemodulus > 0:
-    for configname in loopdatabases():
-      validationinfo = validationdate(configname)
-      print "%s: %s (in %d days)" % (configname, validationinfo[2], validationinfo[1])
-  else:
-    if validatechance > 0:
-      print "Validation is based on chance, probability 1/%d" % validatechance
+    # This action does not need a lock
+    if validatemodulus > 0:
+        for configname in loopdatabases():
+            validationinfo = validationdate(configname)
+            print "%s: %s (in %d days)" % (configname, validationinfo[2], validationinfo[1])
     else:
-      print "Database validation is not turned on"
-else:
-  # Actions that need a lock
-  lock = BackupLock(Configuration.get('autorestorelogdir','autorestore'))
-  try:
-    if action is not None:
-      if action.startswith('--'):
-        if action == '--createcatalog':
-          BackupLogger.init(os.path.join(logdir, "%s-config.log" % (datetime.now().strftime('%Y%m%dT%H%M%S'))), 'config')
-          info("Logfile: %s" % BackupLogger.logfile)
-          Configuration.substitutions.update({'logfile': BackupLogger.logfile})
-          exec_sqlplus(restoretemplate.get('createcatalog'), False)
-      else:
-        runrestore(action)
-    else:
-      # Loop through all sections
-      for configname in loopdatabases():
-        runrestore(configname)
-      # Run ADRCI to clean up diag
-      adrage = int(Configuration.get('logretention','generic'))*1440
-      f1 = mkstemp(suffix=".adi")
-      ftmp = os.fdopen(f1[0], "w")
-      ftmp.write("set base %s\n" % logdir)
-      ftmp.write("show homes\n")
-      ftmp.close()
-      f2 = mkstemp(suffix=".adi")
-      ftmp2 = os.fdopen(f2[0], "w")
-      ftmp2.write("set base %s\n" % logdir)
-      with TemporaryFile() as f:
-        p = Popen([os.path.join(OracleExec.oraclehome, 'bin', 'adrci'), "script=%s" % f1[1]], stdout=f, stderr=None, stdin=None)
-        p.wait()
-        if p.returncode == 0:
-          f.seek(0,0)
-          output = f.read()
-          startreading = False
-          for line in output.splitlines():
-            if line.startswith('ADR Homes:'):
-              startreading = True
-            elif startreading:
-              ftmp2.write("set home %s\n" % line.strip())
-              ftmp2.write("purge -age %d\n" % adrage)
+        if validatechance > 0:
+            print "Validation is based on chance, probability 1/%d" % validatechance
         else:
-          print "Executing ADRCI failed."
-      ftmp2.close()
-      os.unlink(f1[1])
-      with TemporaryFile() as f:
-        p = Popen([os.path.join(OracleExec.oraclehome, 'bin', 'adrci'), "script=%s" % f2[1]], stdout=f, stderr=None, stdin=None)
-        p.wait()
-        if p.returncode != 0:
-          print "Executing ADRCI failed."
-      os.unlink(f2[1])
-  finally:
-    lock.release()
-    print "Exitstatus is %d" % exitstatus
-    sys.exit(exitstatus)
+            print "Database validation is not turned on"
+else:
+    # Actions that need a lock
+    lock = BackupLock(Configuration.get('autorestorelogdir','autorestore'))
+    try:
+        if action is not None:
+            if action.startswith('--'):
+                if action == '--createcatalog':
+                    BackupLogger.init(os.path.join(logdir, "%s-config.log" % (datetime.now().strftime('%Y%m%dT%H%M%S'))), 'config')
+                    info("Logfile: %s" % BackupLogger.logfile)
+                    Configuration.substitutions.update({'logfile': BackupLogger.logfile})
+                    exec_sqlplus(restoretemplate.get('createcatalog'), False)
+            else:
+                runrestore(action)
+        else:
+            # Loop through all sections
+            for configname in loopdatabases():
+                runrestore(configname)
+            # Run ADRCI to clean up diag
+            adrage = int(Configuration.get('logretention','generic'))*1440
+            f1 = mkstemp(suffix=".adi")
+            ftmp = os.fdopen(f1[0], "w")
+            ftmp.write("set base %s\n" % logdir)
+            ftmp.write("show homes\n")
+            ftmp.close()
+            f2 = mkstemp(suffix=".adi")
+            ftmp2 = os.fdopen(f2[0], "w")
+            ftmp2.write("set base %s\n" % logdir)
+            with TemporaryFile() as f:
+                try:
+                    oexec.adrci(f1[1], f)
+                    f.seek(0,0)
+                    output = f.read()
+                    startreading = False
+                    for line in output.splitlines():
+                        if line.startswith('ADR Homes:'):
+                            startreading = True
+                        elif startreading:
+                            ftmp2.write("set home %s\n" % line.strip())
+                            ftmp2.write("purge -age %d\n" % adrage)
+                    ftmp2.close()
+                    oexec.adrci(f2[1], f)
+                except:
+                    print "Executing ADRCI failed."
+                finally:
+                    os.unlink(f1[1])
+                    os.unlink(f2[1])
+    finally:
+        lock.release()
+        print "Exitstatus is %d" % exitstatus
+        sys.exit(exitstatus)

@@ -89,6 +89,9 @@ class RestoreDB(object):
     # Orchestrator
 
     def run(self):
+        self.starttime = datetime.now()
+        info("Starting to restore")
+        #
         success = False
         self._set_parameters()
         self._exec = OracleExec(oraclehome=Configuration.get('oraclehome', 'generic'),
@@ -161,3 +164,26 @@ class RestoreDB(object):
         self._unmount()
         self._snap.dropautoclone()
         self._exec = None
+    
+    def logresult(success):
+        self.endtime = datetime.now()
+        if not success:
+              exitstatus = 1
+        Configuration.substitutions.update({
+            'log_dbname': database,
+            'log_start': starttime.strftime('%Y-%m-%d %H-%M-%S'),
+            'log_stop': endtime.strftime('%Y-%m-%d %H-%M-%S'),
+            'log_success': '1' if success else '0',
+            'log_diff': verifyseconds,
+            'log_snapid': sourcesnapid,
+            'log_validated': '1' if validatecorruption else '0'
+        })
+        debug('Logging the result to catalog.')
+        try:
+            orclexec.sqlldr(Configuration.get('autorestorecatalog','autorestore'), restoretemplate.get('sqlldrlog'))
+        except:
+            pass
+        try:
+            orclexec.exec_sqlplus(restoretemplate.get('insertlog'), False, returnoutput=True)
+        except:
+            exception("Logging the result to catalog failed.")

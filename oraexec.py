@@ -75,7 +75,6 @@ class OracleExec(object):
         f2 = mkstemp(suffix=".log")
         os.close(f2[0])
         with TemporaryFile() as f:
-            # Added direct=true to work around sqlld hang after upgrading to 12c PDB
             p = Popen([os.path.join(self.oraclehome, 'bin', 'sqlldr'), login, "control=%s" % f1[1], "log=%s" % f2[1], "errors=0", "silent=all"], stdout=f, stderr=None, stdin=None)
             p.communicate()
             if p.returncode != 0:
@@ -85,3 +84,11 @@ class OracleExec(object):
                 debug("SQLLDR execution successful")
         os.unlink(f1[1])
         os.unlink(f2[1])
+
+    def adrci(self, inputscriptfilename, outputfilehandle):
+        self._setenv()
+        debug("ADRCI execution starts")
+        p = Popen([os.path.join(self.oraclehome, 'bin', 'adrci'), "script=%s" % inputscriptfilename], stdout=outputfilehandle, stderr=None, stdin=None)
+        p.wait()
+        if p.returncode != 0:
+            raise Exception('adrci','Exit code was not 0.')
