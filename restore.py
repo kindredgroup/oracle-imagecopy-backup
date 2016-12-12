@@ -60,6 +60,13 @@ def ask_yn(question):
         break
     return answer
 
+def ask_timestamp(question):
+    answer = None
+    while True:
+        answer = raw_input("%s? (yyyy-mm-dd hh24:mi:ss) " % question)
+        break
+    return answer
+
 def ask_user_input():
     is_safe = ask_yn("Is this system isolated with no access to production database storage")
     if is_safe != "Y":
