@@ -1,13 +1,12 @@
 #!/usr/bin/python2
 
 import os, sys
-from datetime import datetime, date, timedelta
-from subprocess import Popen, PIPE, check_call
-from backupcommon import BackupLock, BackupLogger, info, debug, error, exception, OracleExec, Configuration, BackupTemplate, create_snapshot_class
-#from ConfigParser import SafeConfigParser
-#from tempfile import mkstemp, TemporaryFile
+from datetime import datetime
+from backupcommon import BackupLock, BackupLogger, info, debug, error, exception, Configuration, BackupTemplate, scriptpath
 from random import randint
 from oraexec import OracleExec
+from restorecommon import RestoreDB
+from tempfile import mkstemp, TemporaryFile
 
 def printhelp():
     print "Usage: autorestore.py <configuration_file_name without directory> [config]"
@@ -36,7 +35,8 @@ Configuration.init('autorestore', configfilename=sys.argv[1], additionaldefaults
     'autorestoreinstancenumber': '1', 'autorestorethread': '1'})
 validatechance = int(Configuration.get('autorestorevalidatechance', 'autorestore'))
 validatemodulus = int(Configuration.get('autorestoremodulus', 'autorestore'))
-oexec = OracleExec(oraclehome=Configuration.get('oraclehome', 'generic'), tnspath=os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic'))
+oexec = OracleExec(oraclehome=Configuration.get('oraclehome', 'generic'), tnspath=os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic')))
+restoretemplate = BackupTemplate('restoretemplate.cfg')
 
 # Does the backup destination exist?
 restoredest = Configuration.get('autorestoredestination','autorestore')
@@ -98,7 +98,6 @@ def runrestore(database):
     cleantarget()
     #
     success = False
-    #verifyseconds = -1
     #
     if validatemodulus > 0:
         # Validation based on modulus
@@ -123,11 +122,28 @@ def runrestore(database):
         exception("Error happened, but we can continue with the next database.")
     finally:
         restore.cleanup()
-        restore.logresult(success)
-
+    # Log result to catalog
+    Configuration.substitutions.update({
+        'log_dbname': database,
+        'log_start': restore.starttime.strftime('%Y-%m-%d %H-%M-%S'),
+        'log_stop': restore.endtime.strftime('%Y-%m-%d %H-%M-%S'),
+        'log_success': '1' if success else '0',
+        'log_diff': restore.verifyseconds,
+        'log_snapid': restore.sourcesnapid,
+        'log_validated': '1' if validatecorruption else '0'
+    })
+    debug('Logging the result to catalog.')
+    try:
+        oexec.sqlldr(Configuration.get('autorestorecatalog','autorestore'), restoretemplate.get('sqlldrlog'))
+    except:
+        debug("Sending the logfile to catalog failed.")
+    try:
+        oexec.sqlplus(restoretemplate.get('insertlog'), silent=False)
+    except:
+        debug("Logging the result to catalog failed.")
     # Finish up
-    BackupLogger.close(True)
     info("Restore %s, elapsed time: %s" % ('successful' if success else 'failed', restore.endtime-restore.starttime))
+    BackupLogger.close(True)
 
 # UI
 
@@ -163,7 +179,7 @@ else:
                     BackupLogger.init(os.path.join(logdir, "%s-config.log" % (datetime.now().strftime('%Y%m%dT%H%M%S'))), 'config')
                     info("Logfile: %s" % BackupLogger.logfile)
                     Configuration.substitutions.update({'logfile': BackupLogger.logfile})
-                    exec_sqlplus(restoretemplate.get('createcatalog'), False)
+                    oexec.sqlplus(restoretemplate.get('createcatalog'), silent=False)
             else:
                 runrestore(action)
         else:
@@ -201,5 +217,6 @@ else:
                     os.unlink(f2[1])
     finally:
         lock.release()
-        print "Exitstatus is %d" % exitstatus
-        sys.exit(exitstatus)
+
+    print "Exitstatus is %d" % exitstatus
+    sys.exit(exitstatus)

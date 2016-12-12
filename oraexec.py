@@ -87,7 +87,6 @@ class OracleExec(object):
 
     def adrci(self, inputscriptfilename, outputfilehandle):
         self._setenv()
-        debug("ADRCI execution starts")
         p = Popen([os.path.join(self.oraclehome, 'bin', 'adrci'), "script=%s" % inputscriptfilename], stdout=outputfilehandle, stderr=None, stdin=None)
         p.wait()
         if p.returncode != 0:
