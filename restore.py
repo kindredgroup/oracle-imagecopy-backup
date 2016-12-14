@@ -1,7 +1,7 @@
 #!/usr/bin/python2
 
 import os, sys, errno
-#from datetime import datetime, date, timedelta
+from datetime import datetime
 #from subprocess import Popen, PIPE, check_call
 from backupcommon import BackupLock, BackupLogger, info, debug, error, exception, Configuration
 from restorecommon import RestoreDB
@@ -32,7 +32,7 @@ def is_dir_writable(path):
 def ask_directory(question, demand_empty=True):
     path = None
     while True:
-        answer = raw_input(question)
+        answer = raw_input("%s " % question)
         if answer is None or answer.strip() == "":
             print "Answer is required"
             continue
@@ -61,23 +61,48 @@ def ask_yn(question):
     return answer
 
 def ask_timestamp(question):
+    dt = None
+    while True:
+        answer = raw_input("%s: (yyyy-mm-dd hh24:mi:ss) " % question)
+        answer = answer.strip()
+        try:
+            dt = datetime.strptime(answer, "%Y-%m-%d %H:%M:%S")
+        except ValueError as e:
+            print "Input does not match required format"
+            continue
+        break
+    return dt
+
+def ask_string(question, maxlength=None, onlyalnum=False):
     answer = None
     while True:
-        answer = raw_input("%s? (yyyy-mm-dd hh24:mi:ss) " % question)
+        answer = raw_input("%s " % question)
+        answer = answer.strip()
+        if maxlength is not None and answer.length() > maxlength:
+            print "Max %d characters allowed" % maxlength
+            continue
+        if onlyalnum and not answer.isalnum():
+            print "Only alphanumeric characters allowed" % maxlength
+            continue
         break
     return answer
 
 def ask_user_input():
+    global restoreparams
+
     is_safe = ask_yn("Is this system isolated with no access to production database storage")
     if is_safe != "Y":
         print "Exiting. Please execute this script in an isolated environment."
         exitvalue = 1
         return
-    mountpath = ask_directory("Directory where to mount clone: ", False)
+    restoreparams['mountpath'] = ask_directory("Directory where to mount clone:", False)
+    restoreparams['timepoint'] = ask_timestamp("Restore database to time point")
+    restoreparams['sid'] = ask_string("Target instance name:", 8, True)
     #
     print "######################################"
     print ""
-    print "Clone mount path: %s" % mountpath
+    print "Clone mount path: %s" % restoreparams['mountpath']
+    print "Restore target time: %s" % restoreparams['timepoint']
     print ""
     is_ok = ask_yn("Are these parameters correct")
     if is_ok != "Y":
@@ -88,6 +113,7 @@ def ask_user_input():
 # Main UI
 
 exitvalue = 0
+restoreparams = {}
 printheader()
 if len(sys.argv) not in [3]:
     printhelp()
@@ -97,5 +123,10 @@ if os.geteuid() == 0:
     sys.exit(0)
 
 ask_user_input()
+if exitvalue == 0:
+    # start restore
+    # if req time > last snap time create a new snapshot
+    # after restore open it and run validation query and report user the time difference
+    pass
 
 sys.exit(exitvalue)
