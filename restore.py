@@ -1,6 +1,6 @@
 #!/usr/bin/python2
 
-import os, sys, errno
+import os, sys, errno, pytz
 from datetime import datetime
 #from subprocess import Popen, PIPE, check_call
 from backupcommon import BackupLock, BackupLogger, info, debug, error, exception, Configuration
@@ -15,7 +15,7 @@ def printheader():
     print ""
 
 def printhelp():
-    print "Usage: restore.py <configuration_file_name without directory> [config]"
+    print "Usage: restore.py <configuration_file_name without directory> <config>"
     sys.exit(2)
 
 def is_dir_writable(path):
@@ -101,8 +101,12 @@ def ask_user_input():
     #
     print "######################################"
     print ""
+    print "Database unique name: %s" % configname
+    print "Oracle home: %s" % Configuration("oraclehome", "generic")
     print "Clone mount path: %s" % restoreparams['mountpath']
-    print "Restore target time: %s" % restoreparams['timepoint']
+    print "Restore target time UTC: %s" % restoreparams['timepoint']
+    print "Restore target time local: %s" % restoreparams['timepoint']
+
     print ""
     is_ok = ask_yn("Are these parameters correct")
     if is_ok != "Y":
@@ -121,6 +125,9 @@ if len(sys.argv) not in [3]:
 if os.geteuid() == 0:
     print "No, I will not run as root."
     sys.exit(0)
+
+configname = sys.argv[2]
+Configuration.init(defaultsection=configname, configfilename=sys.argv[1])
 
 ask_user_input()
 if exitvalue == 0:
