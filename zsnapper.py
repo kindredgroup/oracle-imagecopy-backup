@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 # Check command line arguments
 uioptions = ['list','clean','create','checkage','clone','dropclone','listclones','autoclone']
 if (len(sys.argv) < 3) or (len(sys.argv) > 4) or (not sys.argv[2] in uioptions):
-  print "Usage: zfssnapper.py <config> <%s> [name]" % '|'.join(uioptions)
+  print "Usage: zsnapper.py <config> <%s> [name]" % '|'.join(uioptions)
   sys.exit(2)
 
 configsection = sys.argv[1]
@@ -48,7 +48,7 @@ def clone_snapshot(source=None, clone=None):
   else:
     sourcename = source
   if clone is None:
-    clonename = "%s-clone-%s" % (sourcename, datetime.now().strftime('%Y%m%dT%H%M%S'))
+    clonename = "%s_clone_%s" % (sourcename, datetime.now().strftime('%Y%m%dT%H%M%S'))
   else:
     clonename = clone
   zfs.clone(sourcename, clonename)
