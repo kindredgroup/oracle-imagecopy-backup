@@ -7,6 +7,7 @@ from backupcommon import BackupLock, BackupLogger, info, debug, error, exception
 from restorecommon import RestoreDB
 #from ConfigParser import SafeConfigParser
 from tempfile import TemporaryFile
+from tzlocal import get_localzone
 
 def printheader():
     print "This utility will start a copy of a database restored to a specified point in time."
@@ -78,7 +79,7 @@ def ask_string(question, maxlength=None, onlyalnum=False):
     while True:
         answer = raw_input("%s " % question)
         answer = answer.strip()
-        if maxlength is not None and answer.length() > maxlength:
+        if maxlength is not None and len(answer) > maxlength:
             print "Max %d characters allowed" % maxlength
             continue
         if onlyalnum and not answer.isalnum():
@@ -97,15 +98,24 @@ def ask_user_input():
         return
     restoreparams['mountpath'] = ask_directory("Directory where to mount clone:", False)
     restoreparams['timepoint'] = ask_timestamp("Restore database to time point")
+    is_utc = ask_yn("Was the timestamp in UTC (answer N for local time)")
+    if is_utc == "Y":
+        tz = pytz.utc
+    else:
+        tz = get_localzone()
+    restoreparams['timepoint'] = tz.localize(restoreparams['timepoint'])
+    restore.set_restore_target_time(restoreparams['timepoint'])
     restoreparams['sid'] = ask_string("Target instance name:", 8, True)
     #
     print "######################################"
     print ""
     print "Database unique name: %s" % configname
-    print "Oracle home: %s" % Configuration("oraclehome", "generic")
+    print "Oracle home: %s" % Configuration.get("oraclehome", "generic")
     print "Clone mount path: %s" % restoreparams['mountpath']
-    print "Restore target time UTC: %s" % restoreparams['timepoint']
-    print "Restore target time local: %s" % restoreparams['timepoint']
+    print "Target instance SID: %s" % restoreparams['sid']
+    print "Restore target time UTC: %s" % restoreparams['timepoint'].astimezone(pytz.utc)
+    print "Restore target time local: %s" % restoreparams['timepoint'].astimezone(get_localzone())
+    print "Restored from snapshot: %s" % restore.snapid
 
     print ""
     is_ok = ask_yn("Are these parameters correct")
@@ -128,6 +138,7 @@ if os.geteuid() == 0:
 
 configname = sys.argv[2]
 Configuration.init(defaultsection=configname, configfilename=sys.argv[1])
+restore = RestoreDB(configname)
 
 ask_user_input()
 if exitvalue == 0:
