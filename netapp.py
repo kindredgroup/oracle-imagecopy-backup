@@ -95,6 +95,9 @@ class Netapp(SnapHandler):
         output = self._srv.invoke("volume-clone-create", "parent-volume", self._volname, "parent-snapshot", snapid, "volume", clonename)
         self._check_netapp_error(output, "Creating clone failed")
         output = self._srv.invoke("volume-mount", "junction-path", "/%s" % clonename, "volume-name", clonename)
+        self._check_netapp_error(output, "Mounting clone failed")
+        output = self._srv.invoke("volume-set-option", "option-name", "nosnapdir", "option-value", "on", "volume", clonename)
+        self._check_netapp_error(output, "Setting attribute on clone failed")
 
     def dropclone(self, cloneid):
         info = self.filesystem_info(cloneid)

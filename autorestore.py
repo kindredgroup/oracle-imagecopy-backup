@@ -148,7 +148,7 @@ def runrestore(database):
 # UI
 
 def loopdatabases():
-    excludelist = ['generic','rman','zfssa','autorestore']
+    excludelist = ['generic','rman','zfssa','autorestore','netapp']
     for configname in Configuration.sections():
         if configname not in excludelist:
             if Configuration.get('autorestoreenabled', configname) == '1':

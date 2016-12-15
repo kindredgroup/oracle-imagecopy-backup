@@ -26,6 +26,7 @@ excludelist.append('generic')
 excludelist.append('rman')
 excludelist.append('zfssa')
 excludelist.append('autorestore')
+excludelist.append('netapp')
 
 # Loop through all sections
 for dbname in Configuration.sections():

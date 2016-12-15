@@ -16,6 +16,7 @@ class RestoreDB(object):
     _dbparams = {}
     _configname = None
     _validatecorruption = False
+    verifyseconds = -1
 
     def __init__(self, configname):
         self._restoretemplate = BackupTemplate('restoretemplate.cfg')
