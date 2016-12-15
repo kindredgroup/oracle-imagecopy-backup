@@ -37,7 +37,10 @@ Requirements:
 * Direct NFS in use for Oracle DB (optional, but highly recommended for database availability)
 * Storage for backups must support NFS, snapshots, cloning and optionally compression (deduplication)
 
-It currently supports Oracle ZFS Storage Appliance as backup storage system, but it is easy to extend for other systems. It is planned to add support for Netapp next.
+Supported storage:
+* Netapp ONTAP
+* Oracle ZFS Storage Appliance
+* Others... it is easy to extend for other systems :)
 
 ## Setting up backup
 
@@ -467,20 +470,20 @@ If different configuration files use different ZFSSA projects and different moun
 
 ## Helper tools
 
-### zfssnapper.py
-Tool to run ZFSSA snapshot/clone operations from command line directly.
+### zsnapper.py
+Tool to run storage snapshot/clone operations from command line directly.
 
 Create a new snapshot of database orcl backup area
 
 ```
-[oracle@backup oracle-imagecopy-backup]$ ./zfssnapper.py orcl create
+[oracle@backup oracle-imagecopy-backup]$ ./zsnapper.py orcl create
 Snapshot created: orcl-20161017T093914
 ```
 
 Clone a snapshot
 
 ```
-[oracle@backup oracle-imagecopy-backup]$ ./zfssnapper.py orcl clone orcl-20161017T093914
+[oracle@backup oracle-imagecopy-backup]$ ./zsnapper.py orcl clone orcl-20161017T093914
 Clone created.
 Clone name: orcl-20161017T093914-clone-20161017T094050
 Mount point: /export/demo-backup/orcl-20161017T093914-clone-20161017T094050
@@ -491,7 +494,7 @@ mount -t nfs -o rw,bg,soft,nointr,rsize=32768,wsize=32768,tcp,vers=3,timeo=600 <
 List all snapshots from database orcl
 
 ```
-$ ./zfssnapper.py orcl list
+$ ./zsnapper.py orcl list
 orcl-20160524T153531 [2016-03-13 17:33:23 UTC] total=165MB unique=165MB clones=0
 orcl-20160524T155055 [2016-05-24 13:50:55 UTC] total=164MB unique=1MB clones=0
 orcl-20160524T155205 [2016-05-24 13:52:05 UTC] total=165MB unique=276kB clones=0
@@ -501,21 +504,21 @@ orcl-20161017T093914 [2016-10-17 07:39:14 UTC] total=177MB unique=0B clones=1
 List all clones
 
 ```
-[oracle@backup oracle-imagecopy-backup]$ ./zfssnapper.py orcl listclones
+[oracle@backup oracle-imagecopy-backup]$ ./zsnapper.py orcl listclones
 orcl-20161017T093914-clone-20161017T094050 [orcl-20161017T093914] [mount point: /export/demo-backup/orcl-20161017T093914-clone-20161017T094050]
 ```
 
 Drop clone
 
 ```
-[oracle@backup oracle-imagecopy-backup]$ ./zfssnapper.py orcl dropclone orcl-20161017T093914-clone-20161017T094050
+[oracle@backup oracle-imagecopy-backup]$ ./zsnapper.py orcl dropclone orcl-20161017T093914-clone-20161017T094050
 Clone dropped.
 ```
 
 Check the latest snapshot age, for example for use with Nagios (exits with code 1 for warning state and 2 for critical state)
 
 ```
-[oracle@backup oracle-imagecopy-backup]$ ./zfssnapper.py orcl checkage
+[oracle@backup oracle-imagecopy-backup]$ ./zsnapper.py orcl checkage
 OK: The latest snapshot age 0:03:57.763734
 ```
 
@@ -537,3 +540,11 @@ Detailed backup report for all configured databases.
 ### autorestore_check.sql
 
 Sample PL/SQL procedures and queries to automatically monitor autorestore status (from Nagios for example). Use these as pseudo code and adapt them to your monitoring system use.
+
+## Configure support for Netapp storage (ONTAP)
+
+Support for Netapp storage requires Netapp Manageability SDK 5.6 Python bindings.
+
+1. [Download NetApp Manageability SDK 5.6 from MySupport](http://mysupport.netapp.com/NOW/cgi-bin/software/?product=NetApp+Manageability+SDK&platform=All+Platforms)
+2. Unzip it on your computer
+3. Copy all files under **netapp-manageability-sdk-5.6/lib/python/NetApp**, namely _DfmErrno.py, NaElement.py, NaErrno.py, NaServer.py_ to the root directory of backup scripts (the directory where netapp.py and backup.py are located)
