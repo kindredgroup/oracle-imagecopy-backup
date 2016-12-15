@@ -219,105 +219,117 @@ class BackupLock(object):
             os.remove(self._tmplockfile)
 
 class SnapHandler(object):
-  __metaclass__ = ABCMeta
-  configname = None
+    __metaclass__ = ABCMeta
+    configname = None
 
-  @abstractmethod
-  def __init__(self, configname):
-    self.configname = configname
+    @abstractmethod
+    def __init__(self, configname):
+        self.configname = configname
 
-  @abstractmethod
-  def listsnapshots(self, sortbycreation=False, sortreverse=False):
-    pass
+    @abstractmethod
+    def listsnapshots(self, sortbycreation=False, sortreverse=False):
+        pass
 
-  @abstractmethod
-  def snap(self):
-    # Must return snapshot ID
-    pass
+    @abstractmethod
+    def snap(self):
+        # Must return snapshot ID
+        pass
 
-  @abstractmethod
-  def dropsnap(self, snapid):
-    pass
+    @abstractmethod
+    def dropsnap(self, snapid):
+        pass
 
-  @abstractmethod
-  def getsnapinfo(self, snapstruct):
-    # s is element in list that listsnapshots returns
-    # Must return dict with elements id (string), creation (with type datetime in UTC), numclones (int), space_total (int in bytes), space_unique (int in bytes)
-    pass
+    @abstractmethod
+    def getsnapinfo(self, snapstruct):
+        # s is element in list that listsnapshots returns
+        # Must return dict with elements id (string), creation (with type datetime in UTC), numclones (int), space_total (int in bytes), space_unique (int in bytes)
+        pass
 
-  def snap2str(self, s):
-    # Convert the snap information to one nice string value
-    # Input must come from getsnapinfo
-    return "%s [%s UTC] total=%s unique=%s clones=%s" % (s["id"], s["creation"], size2str(s["space_total"]), size2str(s["space_unique"]), s["numclones"])
+    def snap2str(self, s):
+        # Convert the snap information to one nice string value
+        # Input must come from getsnapinfo
+        return "%s [%s UTC] total=%s unique=%s clones=%s" % (s["id"], s["creation"], size2str(s["space_total"]), size2str(s["space_unique"]), s["numclones"])
 
-  def clone2str(self, s):
-    # Convert clone information to a nice string value
-    return "%s [%s] [mount point: %s]" % (s["clonename"], s["origin"], s["mountpoint"])
+    def clone2str(self, s):
+        # Convert clone information to a nice string value
+        return "%s [%s] [mount point: %s]" % (s["clonename"], s["origin"], s["mountpoint"])
 
-  @abstractmethod
-  def clone(self, snapid, clonename):
-    pass
+    @abstractmethod
+    def clone(self, snapid, clonename):
+        pass
 
-  @abstractmethod
-  def dropclone(self, cloneid):
-    pass
+    @abstractmethod
+    def dropclone(self, cloneid):
+        pass
 
-  def clean(self):
-    max_age_days = int(Configuration.get('snapexpirationdays'))
-    max_age_months = int(Configuration.get('snapexpirationmonths'))
-    sorted_snaps = self.listsnapshots(sortbycreation=True)
-    output = []
-    number_of_snaps = len(sorted_snaps)
-    for idx, snapstruct in enumerate(sorted_snaps):
-      s = self.getsnapinfo(snapstruct)
-      d = s["creation"]
-      age = datetime.utcnow() - d
-      status = "valid"
-      drop_allowed = False
-      dropped = False
-      # Check snap expiration
-      if age > timedelta(days=max_age_days):
-        if age > timedelta(days=max_age_months*31):
-          # Drop is allowed if monthly expiration has also passed
-          drop_allowed = True
+    def clean(self):
+        max_age_days = int(Configuration.get('snapexpirationdays'))
+        max_age_months = int(Configuration.get('snapexpirationmonths'))
+        sorted_snaps = self.listsnapshots(sortbycreation=True)
+        output = []
+        number_of_snaps = len(sorted_snaps)
+        for idx, snapstruct in enumerate(sorted_snaps):
+          s = self.getsnapinfo(snapstruct)
+          d = s["creation"]
+          age = datetime.utcnow() - d
+          status = "valid"
+          drop_allowed = False
+          dropped = False
+          # Check snap expiration
+          if age > timedelta(days=max_age_days):
+            if age > timedelta(days=max_age_months*31):
+              # Drop is allowed if monthly expiration has also passed
+              drop_allowed = True
+            else:
+              if idx+1 < number_of_snaps:
+                # The last snap of each month is retained
+                previnfo = self.getsnapinfo(sorted_snaps[idx+1])
+                drop_allowed = str(s["creation"])[0:7] == str(previnfo["creation"])[0:7]
+          if drop_allowed and s["numclones"] != 0:
+            status = "has a clone"
+            drop_allowed = False
+          # Do the actual drop
+          if drop_allowed:
+            try:
+              self.dropsnap(s["id"])
+              dropped = True
+              status = "dropped"
+            except:
+              status = "DROP FAILED"
+          yield {'snapid': s["id"], 'dropped': dropped, 'status': status, 'infostring': "%s %s" % (self.snap2str(s), status)}
+
+    def autoclone(self):
+        # Returns source snap id
+        maxsnapage = timedelta(hours = int(Configuration.get('autorestoresnapage', 'autorestore')), minutes=0 )
+        # Find the snap for cloning
+        sorted_snaps = self.listsnapshots(sortbycreation=True, sortreverse=True)
+        sourcesnap = None
+        for idx, snaprecord in enumerate(sorted_snaps):
+            s = self.getsnapinfo(snaprecord)
+            d = s["creation"]
+            age = datetime.utcnow() - d
+            if age >= maxsnapage:
+                sourcesnap = s["id"]
+                break
+        if sourcesnap is None:
+            raise Exception('snap','Suitable snapshot not found for cloning.')
         else:
-          if idx+1 < number_of_snaps:
-            # The last snap of each month is retained
-            previnfo = self.getsnapinfo(sorted_snaps[idx+1])
-            drop_allowed = str(s["creation"])[0:7] == str(previnfo["creation"])[0:7]
-      if drop_allowed and s["numclones"] != 0:
-        status = "has a clone"
-        drop_allowed = False
-      # Do the actual drop
-      if drop_allowed:
-        try:
-          self.dropsnap(s["id"])
-          dropped = True
-          status = "dropped"
-        except:
-          status = "DROP FAILED"
-      yield {'snapid': s["id"], 'dropped': dropped, 'status': status, 'infostring': "%s %s" % (self.snap2str(s), status)}
+            # Clone the snap
+            debug("Snapshot id for autoclone: %s" % sourcesnap)
+            self.clone(sourcesnap, Configuration.get('autorestoreclonename', 'autorestore'))
+            return sourcesnap
 
-  def autoclone(self):
-    # Returns source snap id
-    maxsnapage = timedelta(hours = int(Configuration.get('autorestoresnapage', 'autorestore')), minutes=0 )
-    # Find the snap for cloning
-    sorted_snaps = self.listsnapshots(sortbycreation=True, sortreverse=True)
-    sourcesnap = None
-    for idx, snaprecord in enumerate(sorted_snaps):
-      s = self.getsnapinfo(snaprecord)
-      d = s["creation"]
-      age = datetime.utcnow() - d
-      if age >= maxsnapage:
-        sourcesnap = s["id"]
-        break
-    if sourcesnap is None:
-      raise Exception('snap','Suitable snapshot not found for cloning.')
-    else:
-      # Clone the snap
-      debug("Snapshot id for autoclone: %s" % sourcesnap)
-      self.clone(sourcesnap, Configuration.get('autorestoreclonename', 'autorestore'))
-      return sourcesnap
+    def dropautoclone(self):
+        self.dropclone(Configuration.get('autorestoreclonename', 'autorestore'))
 
-  def dropautoclone(self):
-    self.dropclone(Configuration.get('autorestoreclonename', 'autorestore'))
+    # Finds the correct snapshot to clone based on restore target time
+    # Targettime must be in UTC
+    def search_recovery_snapid(self, targettime):
+        sorted_snaps = self.listsnapshots(sortbycreation=True, sortreverse=False)
+        sourcesnap = None
+        for idx, snaprecord in enumerate(sorted_snaps):
+            s = self.getsnapinfo(snaprecord)
+            if s['creation'].replace(tzinfo=None) >= targettime.replace(tzinfo=None):
+                sourcesnap = s['id']
+                break
+        return sourcesnap

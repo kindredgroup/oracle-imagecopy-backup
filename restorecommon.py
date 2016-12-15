@@ -1,10 +1,11 @@
-import os, sys
+import os, sys, pytz
 from tempfile import mkstemp, TemporaryFile
 from datetime import datetime, timedelta
 from backupcommon import BackupLogger, info, debug, error, exception, Configuration, BackupTemplate, create_snapshot_class, scriptpath
 from oraexec import OracleExec
 from ConfigParser import SafeConfigParser
 from subprocess import check_call
+from tzlocal import get_localzone
 
 class RestoreDB(object):
     _restoretemplate = None
@@ -20,6 +21,7 @@ class RestoreDB(object):
     sourcesnapid = ""
     _successful_clone = False
     _successful_mount = False
+    targettime = None
 
     def __init__(self, configname):
         self._restoretemplate = BackupTemplate('restoretemplate.cfg')
@@ -35,6 +37,14 @@ class RestoreDB(object):
         if restoredest is None or not os.path.exists(restoredest) or not os.path.isdir(restoredest):
             raise Exception('restore', "Restore directory %s not found or is not a proper directory" % restoredest)
         self._restoredest = restoredest
+
+    def set_restore_target_time(self, targettime):
+        if targettime.tzinfo is None:
+            raise Exception('restore', 'set_restore_target_time expects a datetime object with time zone information')
+        self.targettime = targettime
+        self.snapid = self._snap.search_recovery_snapid(targettime.astimezone(pytz.utc))
+        if self.snapid is None:
+            raise Exception('restore', 'Suitable snapshot not found. If requested time is after the latest backup was taken, please use zsnapper.py to create a new snapshot first.')
 
     # Helpers for executing Oracle commands
     def _exec_rman(self, commands):
