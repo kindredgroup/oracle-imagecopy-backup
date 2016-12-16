@@ -17,6 +17,7 @@ class RestoreDB(object):
     _configname = None
     _validatecorruption = False
     verifyseconds = -1
+    sourcesnapid = ""
 
     def __init__(self, configname):
         self._restoretemplate = BackupTemplate('restoretemplate.cfg')
