@@ -18,6 +18,8 @@ class RestoreDB(object):
     _validatecorruption = False
     verifyseconds = -1
     sourcesnapid = ""
+    _successful_clone = False
+    _successful_mount = False
 
     def __init__(self, configname):
         self._restoretemplate = BackupTemplate('restoretemplate.cfg')
@@ -58,9 +60,11 @@ class RestoreDB(object):
 
     def _clone(self):
         self.sourcesnapid = self._snap.autoclone()
+        self._successful_clone = True
 
     def _mount(self):
         check_call(['mount', self._mountdest])
+        self._successful_mount = True
 
     def _unmount(self):
         check_call(['umount', self._mountdest])
@@ -169,12 +173,14 @@ class RestoreDB(object):
             self._exec_sqlplus(self._restoretemplate.get('shutdownabort'))
         except:
             pass
-        try:
-            self._unmount()
-        except:
-            exception("Error unmounting")
-        try:
-            self._snap.dropautoclone()
-        except:
-            exception("Error dropping clone")
+        if self._successful_mount:
+            try:
+                self._unmount()
+            except:
+                exception("Error unmounting")
+        if self._successful_clone:
+            try:
+                self._snap.dropautoclone()
+            except:
+                exception("Error dropping clone")
         self.endtime = datetime.now()
