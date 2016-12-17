@@ -1,5 +1,5 @@
 import os, sys, pytz
-from tempfile import mkstemp, TemporaryFile
+from tempfile import mkstemp, TemporaryFile, mkdtemp
 from datetime import datetime, timedelta
 from backupcommon import BackupLogger, info, debug, error, exception, Configuration, BackupTemplate, create_snapshot_class, scriptpath
 from oraexec import OracleExec
@@ -42,8 +42,8 @@ class RestoreDB(object):
         if targettime.tzinfo is None:
             raise Exception('restore', 'set_restore_target_time expects a datetime object with time zone information')
         self.targettime = targettime
-        self.snapid = self._snap.search_recovery_snapid(targettime.astimezone(pytz.utc))
-        if self.snapid is None:
+        self.sourcesnapid = self._snap.search_recovery_snapid(targettime.astimezone(pytz.utc))
+        if self.sourcesnapid is None:
             raise Exception('restore', 'Suitable snapshot not found. If requested time is after the latest backup was taken, please use zsnapper.py to create a new snapshot first.')
 
     # Helpers for executing Oracle commands
@@ -68,8 +68,13 @@ class RestoreDB(object):
             debug("ACTION: Generated init file %s\n%s" % (filename, contents))
             f.write(contents)
 
-    def _clone(self):
-        self.sourcesnapid = self._snap.autoclone()
+    def clone(self, autorestore=True):
+        if autorestore:
+            self.sourcesnapid = self._snap.autoclone()
+        else:
+            self.clonename = "restore_%s_%s" % (self._configname, datetime.now().strftime("%Y%m%d_%H%M%S"))
+            self._snap.clone(self.sourcesnapid, self.clonename)
+            self.mountstring = self._snap.mountstring(self.clonename)
         self._successful_clone = True
 
     def _mount(self):
@@ -83,7 +88,10 @@ class RestoreDB(object):
         dbconfig = SafeConfigParser()
         dbconfig.read(os.path.join(self._mountdest, 'autorestore.cfg'))
         self._dbparams['dbname'] = dbconfig.get('dbparams','db_name')
-        self._dbparams['restoretarget'] = datetime.strptime(dbconfig.get('dbparams','lasttime'), '%Y-%m-%d %H:%M:%S')
+        if self.targettime is None:
+            self._dbparams['restoretarget'] = datetime.strptime(dbconfig.get('dbparams','lasttime'), '%Y-%m-%d %H:%M:%S')
+        else:
+            self._dbparams['restoretarget'] = self.targettime.astimezone(get_localzone())
         self._dbparams['bctfile'] = dbconfig.get('dbparams','bctfile')
         Configuration.substitutions.update({
             'db_name': self._dbparams['dbname'],
@@ -91,8 +99,8 @@ class RestoreDB(object):
             'db_files': dbconfig.get('dbparams','db_files'),
             'db_undotbs': dbconfig.get('dbparams','undo_tablespace'),
             'db_block_size': dbconfig.get('dbparams','db_block_size'),
-            'lastscn': dbconfig.get('dbparams','lastscn'),
-            'lasttime': dbconfig.get('dbparams','lasttime'),
+#            'lastscn': dbconfig.get('dbparams','lastscn'),
+            'lasttime': self._dbparams['restoretarget'].strftime('%Y-%m-%d %H:%M:%S'),
             'dbid': Configuration.get('dbid', self._configname),
             'instancenumber': Configuration.get('autorestoreinstancenumber', self._configname),
             'thread': Configuration.get('autorestorethread', self._configname),
@@ -105,30 +113,12 @@ class RestoreDB(object):
             Configuration.substitutions.update({'cdb': dbconfig.get('dbparams','enable_pluggable_database')})
         except:
             Configuration.substitutions.update({'cdb': 'FALSE'})
-        self._initfile = self._restoretemplate.get('initoralocation')
+        self._initfile = os.path.join(self._restoredest, 'init.ora')
         Configuration.substitutions.update({
             'initora': self._initfile,
         })
 
-    # Orchestrator
-
-    def run(self):
-        self.starttime = datetime.now()
-        info("Starting to restore")
-        #
-        success = False
-        self._clone()
-        try:
-            self._mount()
-        except:
-            self.cleanup()
-            raise Exception('restore', 'Mount failed')
-        self._set_parameters()
-        self._createinitora()
-        self._exec = OracleExec(oraclehome=Configuration.get('oraclehome', 'generic'),
-            tnspath=os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic')),
-            sid=self._dbparams['dbname'])
-        #
+    def _run_restore(self):
         debug('ACTION: startup nomount')
         self._exec_sqlplus(self._restoretemplate.get('startupnomount'))
         debug('ACTION: mount database and catalog files')
@@ -145,26 +135,56 @@ class RestoreDB(object):
         debug('ACTION: switch and recover')
         self._exec_rman("%s\n%s" % (switchdfscript, self._restoretemplate.get('recoverdatafiles')))
 
-    def verify(self):
+    # Orchestrator
+    def pit_restore(self, mountpath, sid):
+        self._restoredest = mkdtemp(prefix="restore", dir=mountpath)
+        self._mountdest = mountpath
+        self._restoresid = sid
+        self._set_parameters()
+        self._createinitora()
+        self._exec = OracleExec(oraclehome=Configuration.get('oraclehome', 'generic'),
+            tnspath=os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic')),
+            sid=sid)
+        self._run_restore()
+
+    def run(self):
+        self.starttime = datetime.now()
+        info("Starting to restore")
+        #
+        success = False
+        self.clone()
+        try:
+            self._mount()
+        except:
+            self.cleanup()
+            raise Exception('restore', 'Mount failed')
+        self._set_parameters()
+        self._createinitora()
+        self._exec = OracleExec(oraclehome=Configuration.get('oraclehome', 'generic'),
+            tnspath=os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic')),
+            sid=self._dbparams['dbname'])
+        #
+        self._run_restore()
+
+    def verify(self, tolerancechecking=True):
         debug('ACTION: opening database to verify the result')
-        maxtolerance = timedelta(minutes=int(Configuration.get('autorestoremaxtoleranceminutes','autorestore')))
-        verifytime = None
+        if tolerancechecking:
+            maxtolerance = timedelta(minutes=int(Configuration.get('autorestoremaxtoleranceminutes','autorestore')))
         Configuration.substitutions.update({
             'customverifydate': Configuration.get('customverifydate', self._configname),
         })
         output = self._exec_sqlplus(self._restoretemplate.get('openandverify'), returnoutput=True)
         for line in output.splitlines():
             if line.startswith('CUSTOM VERIFICATION TIME:'):
-                verifytime = datetime.strptime(line.split(':', 1)[1].strip(), '%Y-%m-%d %H:%M:%S')
-        if verifytime is None:
+                self.verifytime = datetime.strptime(line.split(':', 1)[1].strip(), '%Y-%m-%d %H:%M:%S')
+        if self.verifytime is None:
             raise Exception('restore', 'Reading verification time failed.')
-        #lastrestoretime = datetime.strptime(dbconfig.get('dbparams','lasttime'), '%Y-%m-%d %H:%M:%S')
-        verifydiff = self._dbparams['restoretarget'] - verifytime
-        self.verifyseconds = int(verifydiff.seconds + verifydiff.days * 24 * 3600)
+        self.verifydiff = self._dbparams['restoretarget'].replace(tzinfo=None) - self.verifytime
+        self.verifyseconds = int(self.verifydiff.seconds + self.verifydiff.days * 24 * 3600)
         debug("Expected time: %s" % self._dbparams['restoretarget'])
-        debug("Verified time: %s" % verifytime)
-        debug("VERIFY: Time difference %s" % verifydiff)
-        if verifydiff > maxtolerance:
+        debug("Verified time: %s" % self.verifytime)
+        debug("VERIFY: Time difference %s" % self.verifydiff)
+        if tolerancechecking and self.verifydiff > maxtolerance:
             raise Exception('restore', "Verification time difference %s is larger than allowed tolerance %s" % (verifydiff, maxtolerance))
 
     def blockcheck(self):

@@ -93,7 +93,7 @@ class ZFSSA(SnapHandler):
     d = datetime.strptime(zfsdate, '%Y%m%dT%H:%M:%S')
     return d
 
-  # ZFS calling functions
+  # Public interfaces
 
   def filesystem_info(self, filesystemname=None):
     urlarray = ['pools', self._pool, 'projects', self._project, 'filesystems']
@@ -113,7 +113,11 @@ class ZFSSA(SnapHandler):
         if origin["project"] == self._project and origin["share"] == self._filesystem:
           yield { 'clonename': s["name"], 'origin': origin["snapshot"], 'mountpoint': s["mountpoint"] }
 
-  # Public interfaces
+  def mountstring(self, filesystemname):
+    info = self.filesystem_info(filesystemname)
+    return "zfs_server_address:%s" % info['mountpoint']
+
+
   def snap(self):
     snapname = "%s-%s" % (self._filesystem, datetime.now().strftime('%Y%m%dT%H%M%S'))
     payload = { 'name': snapname }

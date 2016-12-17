@@ -262,6 +262,29 @@ class SnapHandler(object):
     def dropclone(self, cloneid):
         pass
 
+    @abstractmethod
+    def filesystem_info(self, filesystemname=None):
+        # Must return dict with the following information about a (cloned) volume/filesystem
+        # origin - parent volume name of the clone
+        # clonename - name of the clone volume
+        # mountpoint - storage system mount path for this volume
+        pass
+
+    @abstractmethod
+    def listclones(self):
+        # Array of dicts that lists all clones of the parent volume
+        # origin - parent volume name of the clone
+        # clonename - name of the clone volume
+        # mountpoint - storage system mount path for this volume
+        pass
+
+    @abstractmethod
+    def mountstring(self, filesystemname):
+        # Outputs string on how to mount the volume/filesystem
+        # For example:
+        # 10.10.10.10:/clonename
+        pass
+
     def clean(self):
         max_age_days = int(Configuration.get('snapexpirationdays'))
         max_age_months = int(Configuration.get('snapexpirationmonths'))

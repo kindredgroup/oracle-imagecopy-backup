@@ -7,6 +7,7 @@ from NaServer import *
 class Netapp(SnapHandler):
     _exceptionbase = "netapp"
     _blocksize = 1024
+    _filer = None
 
     def __init__(self, configname):
         zfscredfilename = os.path.join(scriptpath(), 'netappcredentials.cfg')
@@ -17,17 +18,18 @@ class Netapp(SnapHandler):
         zfscredconfig.read(zfscredfilename)
         zfsauth = (zfscredconfig.get('netappcredentials','user'), zfscredconfig.get('netappcredentials','password'))
         #
-        self._srv = NaServer(Configuration.get('filer', 'netapp'), 1, 1)
+        self._filer = Configuration.get('filer', 'netapp')
+        self._srv = NaServer(self._filer, 1, 1)
         self._srv.set_admin_user(zfscredconfig.get('netappcredentials','user'), zfscredconfig.get('netappcredentials','password'))
         self._volprefix = Configuration.get('volumeprefix', 'netapp')
         self._volname = "%s%s" % (self._volprefix, configname)
         super(Netapp, self).__init__(configname)
-    
+
     def _check_netapp_error(self, output, errmsg):
         if output.results_errno() != 0:
             raise Exception(self._exceptionbase, "%s. %s" % (errmsg, output.results_reason()))
 
-    # Extra functions for zsnapper
+    # Public interfaces
     def filesystem_info(self, filesystemname=None):
         info = {}
         output = self._srv.invoke("volume-clone-get", "volume", filesystemname)
@@ -40,7 +42,7 @@ class Netapp(SnapHandler):
             info['clonename'] = filesystemname
             info['mountpoint'] = ss.child_get_string('junction-path')
         return info
-    
+
     def listclones(self):
         elem = NaElement("volume-clone-get-iter")
         elem.child_add_string("max-records", "50")
@@ -58,9 +60,11 @@ class Netapp(SnapHandler):
                 info['clonename'] = ss.child_get_string('volume')
                 info['mountpoint'] = ss.child_get_string('junction-path')
                 yield info
-         
-    
-    # Public interfaces
+
+    def mountstring(self, filesystemname):
+        info = self.filesystem_info(filesystemname)
+        return "%s:%s" % (self._filer, info['mountpoint'])
+
     def snap(self):
         snapname = "%s_%s" % (self._volname, datetime.now().strftime('%Y%m%dT%H%M%S'))
         output = self._srv.invoke("snapshot-create", "volume", self._volname, "snapshot", snapname)
@@ -70,7 +74,7 @@ class Netapp(SnapHandler):
     def dropsnap(self, snapid):
         output = self._srv.invoke("snapshot-delete", "volume", self._volname, "snapshot", snapid)
         self._check_netapp_error(output, "Failed to drop snapshot %s" % snapid)
-    
+
     def getsnapinfo(self, snapstruct):
         return snapstruct
 
@@ -81,8 +85,8 @@ class Netapp(SnapHandler):
         snapshots = []
         if (snapshotlist is not None and snapshotlist):
             for ss in snapshotlist.children_get():
-                snapshots.append( {'id': ss.child_get_string("name"), 
-                    'creation': datetime.utcfromtimestamp(float(ss.child_get_int("access-time"))), 
+                snapshots.append( {'id': ss.child_get_string("name"),
+                    'creation': datetime.utcfromtimestamp(float(ss.child_get_int("access-time"))),
                     'numclones':  1 if ss.child_get_string("busy") == "true" else 0,
                     'space_total': ss.child_get_int("cumulative-total")*self._blocksize,
                     'space_unique': ss.child_get_int("total")*self._blocksize } )

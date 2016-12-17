@@ -49,13 +49,13 @@ Supported storage:
 Oracle Linux 6
 
 ```
-yum install python-requests python
+yum install python-requests python pytz python-tzlocal
 ```
 
 Oracle Linux 7
 
 ```
-yum install python-requests python2
+yum install python-requests python2 pytz python-tzlocal
 ```
 
 ### Prepare Oracle database home
@@ -264,7 +264,7 @@ backup.py orcl missingarchlog
 #### Option 1
 
 Each database can schedule its own backup using DBMS\_SCHEDULER external jobs. This option is the easiest to set up.
-**schedulebackup** and **schedulearchlog** are DBMS\_SCHEDULER calendar expressions when the backup jobs should run. 
+**schedulebackup** and **schedulearchlog** are DBMS\_SCHEDULER calendar expressions when the backup jobs should run.
 
 To monitor backup job completion, then you just need to monitor the DBMS\_SCHEDULER job executions. If backup fails, then also the corresponding DBMS\_SCHEDULER job executions fails.
 
