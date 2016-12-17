@@ -57,7 +57,7 @@ def clone_snapshot(source=None, clone=None):
   print "Clone name: %s" % clonename
   print "Mount point: %s" % fs["mountpoint"]
   print "Mount command (execute as root and replace zfs ip address and mount directory):"
-  print "mount -t nfs -o rw,bg,soft,nointr,rsize=32768,wsize=32768,tcp,vers=3,timeo=600 <zfs_ip_address>:%s <mount_directory_here>" % fs["mountpoint"]
+  print "mount -t nfs -o rw,bg,hard,nointr,rsize=32768,wsize=32768,tcp,vers=3,timeo=600 %s <mount_directory_here>" % zfs.mountpoint(clonename)
 
 # Call the correct procedure based on parameters
 if sys.argv[2] == 'clean':
@@ -83,4 +83,4 @@ elif sys.argv[2] == 'autoclone':
 else:
   snaps = zfs.listsnapshots()
   for s in snaps:
-    print zfs.snap2str(zfs.getsnapinfo(s))
+     print zfs.snap2str(zfs.getsnapinfo(s))
