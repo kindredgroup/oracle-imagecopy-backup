@@ -470,6 +470,56 @@ If different configuration files use different ZFSSA projects and different moun
 
 ## Helper tools
 
+### restore.py
+
+Restores database to a user specified time and opens it up as a separate instance on a separate server.
+
+```
+[oracle@autorestore oracle-imagecopy-backup]$ ./restore.py backup.cfg orcl
+This utility will start a copy of a database restored to a specified point in time.
+THIS UTILITY SHOULD NOT BE RUN ON A SYSTEM WITH ACCESS TO PRODUCTION STORAGE!
+THIS UTILITY IS NOT INTENDED FOR EMERGENCY PRODUCTION RESTORE.
+
+Is this system isolated with no access to production database storage? (y/n) y
+Directory where to mount clone: /tmp/mnt
+Restore database to time point: (yyyy-mm-dd hh24:mi:ss) 2016-12-17 20:40:35
+Was the timestamp in UTC (answer N for local time)? (y/n) n
+Target instance name: orclrest
+######################################
+
+Database unique name: orcl
+Oracle home: /u01/app/oracle/product/12.1.0.2/db
+Clone mount path: /tmp/mnt
+Target instance SID: orclrest
+Restore target time UTC: 2016-12-17 19:40:35+00:00
+Restore target time local: 2016-12-17 20:40:35+01:00
+Restored from snapshot: orcl-20161217T204443
+
+Are these parameters correct? (y/n) y
+
+######################################
+Please execute the following command as root to mount the backup volume:
+
+mount -t nfs -o rw,bg,hard,nointr,rsize=32768,wsize=32768,tcp,vers=3,timeo=600 \
+  zfs_server_address:/export/demo-backup/restore_orcl_20161217_221147 /tmp/mnt
+
+Did you execute it? (y/n) y
+Session log file: /tmp/restore_20161217T221218_orcl.log
+22:12:18 INFO     root            Starting database restore
+22:12:58 INFO     root            Database restore complete
+22:12:58 INFO     root            SID: orclrest
+22:12:58 INFO     root            Requested target time: 2016-12-17 20:40:35+01:00
+22:12:58 INFO     root            Verified restored database time: 2016-12-17 20:40:32
+22:12:58 INFO     root            Difference from target: 0:00:03
+
+Commands to clean up:
+1. Shut down database instance orclrest
+2. Execute as root: umount /tmp/mnt
+3. Drop clone: 
+   BACKUPCONFIG=backup.cfg /home/oracle/oracle-imagecopy-backup/zsnapper.py orcl \
+     dropclone restore_orcl_20161217_221147
+```
+
 ### zsnapper.py
 Tool to run storage snapshot/clone operations from command line directly.
 
