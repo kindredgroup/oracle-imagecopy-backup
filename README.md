@@ -42,6 +42,8 @@ Supported storage:
 * Oracle ZFS Storage Appliance
 * Others... it is easy to extend for other systems :)
 
+When running on Amazon Web Services (AWS) cloud platform, I recommend using [Netapp Cloud Storage Solutions](https://aws.amazon.com/testdrive/netapp/) to provide the backup storage, since currently Amazon Elastic File System (EFS) does not implement the features required for this system to work.
+
 ## Setting up backup
 
 ### Prepare OS
@@ -515,7 +517,7 @@ Session log file: /tmp/restore_20161217T221218_orcl.log
 Commands to clean up:
 1. Shut down database instance orclrest
 2. Execute as root: umount /tmp/mnt
-3. Drop clone: 
+3. Drop clone:
    BACKUPCONFIG=backup.cfg /home/oracle/oracle-imagecopy-backup/zsnapper.py orcl \
      dropclone restore_orcl_20161217_221147
 ```
