@@ -142,13 +142,12 @@ def exec_restore():
         exitvalue = 1
         return
     #
-    BackupLogger.init('/tmp/restore_%s_%s.log' % (datetime.now().strftime('%Y%m%dT%H%M%S'), configname))
-    BackupLogger.clean()
-    Configuration.substitutions.update({
-        'logdir': '/tmp',
-        'logfile': BackupLogger.logfile
-    })
-    print "Session log file: %s" % BackupLogger.logfile
+    debug("Oracle home: %s" % Configuration.get("oraclehome", "generic"))
+    debug("Clone mount path: %s" % restoreparams['mountpath'])
+    debug("Target instance SID: %s" % restoreparams['sid'])
+    debug("Restore target time UTC: %s" % restoreparams['timepoint'].astimezone(pytz.utc))
+    debug("Restore target time local: %s" % restoreparams['timepoint'].astimezone(get_localzone()))
+    debug("Restored from snapshot: %s" % restore.sourcesnapid)
     info("Starting database restore")
     #
     try:
@@ -184,6 +183,15 @@ if os.geteuid() == 0:
 configname = sys.argv[2]
 Configuration.init(defaultsection=configname, configfilename=sys.argv[1], additionaldefaults={'customverifydate': 'select max(time_dp) from sys.smon_scn_time',
     'autorestoreenabled': '1', 'autorestoreinstancenumber': '1', 'autorestorethread': '1'})
+
+BackupLogger.init('/tmp/restore_%s_%s.log' % (datetime.now().strftime('%Y%m%dT%H%M%S'), configname), configname)
+BackupLogger.clean()
+Configuration.substitutions.update({
+    'logdir': '/tmp',
+    'logfile': BackupLogger.logfile
+})
+print "Session log file: %s" % BackupLogger.logfile
+
 restore = RestoreDB(configname)
 
 ask_user_input()
