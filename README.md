@@ -48,6 +48,8 @@ When running on Amazon Web Services (AWS) cloud platform, I recommend using [Net
 
 ### Prepare OS
 
+python-tzlocal is part of [EPEL](https://fedoraproject.org/wiki/EPEL) repository. Only restore hosts need it.
+
 Oracle Linux 6
 
 ```
