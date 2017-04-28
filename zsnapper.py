@@ -57,7 +57,7 @@ def clone_snapshot(source=None, clone=None):
   print "Clone name: %s" % clonename
   print "Mount point: %s" % fs["mountpoint"]
   print "Mount command (execute as root and replace zfs ip address and mount directory):"
-  print "mount -t nfs -o rw,bg,hard,nointr,rsize=32768,wsize=32768,tcp,vers=3,timeo=600 %s <mount_directory_here>" % zfs.mountpoint(clonename)
+  print "mount -t nfs -o rw,bg,hard,nointr,rsize=32768,wsize=32768,tcp,vers=3,timeo=600 %s <mount_directory_here>" % zfs.mountstring(clonename)
 
 # Call the correct procedure based on parameters
 if sys.argv[2] == 'clean':
