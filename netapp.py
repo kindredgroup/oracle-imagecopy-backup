@@ -29,8 +29,18 @@ class Netapp(SnapHandler):
         if output.results_errno() != 0:
             raise Exception(self._exceptionbase, "%s. %s" % (errmsg, output.results_reason()))
     
-    def _convert_32bit_signed_int(self, i):
-        return i & 0xffffffff
+    def _volsize_to_num(self, volsize):
+        unit = volsize[-1].lower()
+        factor = 1
+        if unit == "m":
+            factor = 20
+        elif unit == "g":
+            factor = 30
+        elif unit == "t":
+            factor = 40
+        elif unit == "p":
+            factor = 50
+        return int(volsize[:-1])*(2**factor)
 
     # Public interfaces
     def filesystem_info(self, filesystemname=None):
@@ -82,6 +92,10 @@ class Netapp(SnapHandler):
         return snapstruct
 
     def listsnapshots(self, sortbycreation=False, sortreverse=False):
+        output = self._srv.invoke("volume-size", "volume", self._volname)
+        self._check_netapp_error(output, "Failed to volume size information")
+        volsize = self._volsize_to_num(output.child_get_string("volume-size"))
+        pct_limit = round(2147483648*100/(volsize/self._blocksize))
         output = self._srv.invoke("snapshot-list-info", "volume", self._volname)
         self._check_netapp_error(output, "Failed to list snapshots")
         snapshotlist = output.child_get("snapshots")
@@ -91,8 +105,9 @@ class Netapp(SnapHandler):
                 snapshots.append( {'id': ss.child_get_string("name"),
                     'creation': datetime.utcfromtimestamp(float(ss.child_get_int("access-time"))),
                     'numclones':  1 if ss.child_get_string("busy") == "true" else 0,
-                    'space_total': self._convert_32bit_signed_int(ss.child_get_int("cumulative-total"))*self._blocksize,
-                    'space_unique': self._convert_32bit_signed_int(ss.child_get_int("total"))*self._blocksize } )
+                    'space_total': ss.child_get_int("cumulative-total")*self._blocksize if ss.child_get_int("cumulative-percentage-of-total-blocks") < pct_limit else round(volsize*ss.child_get_int("cumulative-percentage-of-total-blocks")/100),
+                    'space_unique': ss.child_get_int("total")*self._blocksize if ss.child_get_int("percentage-of-total-blocks") < pct_limit else round(volsize*ss.child_get_int("percentage-of-total-blocks")/100) 
+                } )
         if not sortbycreation:
             return snapshots
         else:
