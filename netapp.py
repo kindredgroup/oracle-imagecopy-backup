@@ -28,6 +28,9 @@ class Netapp(SnapHandler):
     def _check_netapp_error(self, output, errmsg):
         if output.results_errno() != 0:
             raise Exception(self._exceptionbase, "%s. %s" % (errmsg, output.results_reason()))
+    
+    def _convert_32bit_signed_int(self, i):
+        return i & 0xffffffff
 
     # Public interfaces
     def filesystem_info(self, filesystemname=None):
@@ -88,8 +91,8 @@ class Netapp(SnapHandler):
                 snapshots.append( {'id': ss.child_get_string("name"),
                     'creation': datetime.utcfromtimestamp(float(ss.child_get_int("access-time"))),
                     'numclones':  1 if ss.child_get_string("busy") == "true" else 0,
-                    'space_total': ss.child_get_int("cumulative-total")*self._blocksize,
-                    'space_unique': ss.child_get_int("total")*self._blocksize } )
+                    'space_total': self._convert_32bit_signed_int(ss.child_get_int("cumulative-total"))*self._blocksize,
+                    'space_unique': self._convert_32bit_signed_int(ss.child_get_int("total"))*self._blocksize } )
         if not sortbycreation:
             return snapshots
         else:
