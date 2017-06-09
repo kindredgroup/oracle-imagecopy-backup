@@ -40,7 +40,7 @@ class Netapp(SnapHandler):
             factor = 40
         elif unit == "p":
             factor = 50
-        return int(volsize[:-1])*(2**factor)
+        return round(float(volsize[:-1])*(2**factor))
 
     # Public interfaces
     def filesystem_info(self, filesystemname=None):
