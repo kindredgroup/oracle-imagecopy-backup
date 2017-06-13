@@ -1,5 +1,5 @@
 import os, operator
-from backupcommon import SnapHandler, Configuration, scriptpath, info, error, debug
+from backupcommon import SnapHandler, Configuration, scriptpath, info, error, debug, UIElement
 from ConfigParser import SafeConfigParser
 from datetime import datetime, timedelta
 from NaServer import *
@@ -93,7 +93,7 @@ class Netapp(SnapHandler):
 
     def listsnapshots(self, sortbycreation=False, sortreverse=False):
         output = self._srv.invoke("volume-size", "volume", self._volname)
-        self._check_netapp_error(output, "Failed to volume size information")
+        self._check_netapp_error(output, "Failed to get volume size information")
         volsize = self._volsize_to_num(output.child_get_string("volume-size"))
         pct_limit = round(2147483648*100/(volsize/self._blocksize))
         output = self._srv.invoke("snapshot-list-info", "volume", self._volname)
@@ -131,3 +131,44 @@ class Netapp(SnapHandler):
         self._check_netapp_error(output, "Offlining volume %s failed" % cloneid)
         output = self._srv.invoke("volume-destroy", "name", cloneid)
         self._check_netapp_error(output, "Dropping volume %s failed" % cloneid)
+
+    def createvolume(self):
+        uid = os.getuid()
+        gid = os.getgid()
+        permissions = "0770"
+        #
+        ui = UIElement()
+        aggregate = ui.ask_string("Aggregate name:", 50)
+        volume_size = ui.ask_size("Volume size:")
+        path = ui.ask_string("Parent namespace:", 50)
+        export_policy = ui.ask_string("Export policy:", 50)
+        #
+        output = self._srv.invoke(
+            "volume-create", "volume", self._volname, "containing-aggr-name", aggregate, "efficiency-policy", "default", "export-policy", export_policy, 
+            "group-id", gid, "user-id", os.getuid(), "unix-permissions", permissions, 
+            "junction-path", os.path.join(path, self.configname), "percentage-snapshot-reserve", 0, "size", volume_size, "volume-state", "online")
+        self._check_netapp_error(output, "Creating volume failed")        
+        #
+        rootelem = NaElement("volume-modify-iter")
+        attrelem1 = NaElement("attributes")
+        attrelem = NaElement("volume-attributes")
+        attrelem1.child_add(attrelem)
+        queryelem1 = NaElement("query")
+        queryelem = NaElement("volume-attributes")
+        queryelem1.child_add(queryelem)
+        volid = NaElement("volume-id-attributes")
+        volid.child_add_string("name", self._volname)
+        queryelem.child_add(volid)
+        snapattr = NaElement("volume-snapshot-attributes")
+        snapattr.child_add_string("auto-snapshots-enabled", "false")
+        snapattr.child_add_string("snapdir-access-enabled", "false")
+        autosizeattr = NaElement("volume-autosize-attributes")
+        autosizeattr.child_add_string("mode", "grow")
+        attrelem.child_add(snapattr)
+        attrelem.child_add(autosizeattr)
+        rootelem.child_add(attrelem1)
+        rootelem.child_add(queryelem1)
+        rootelem.child_add_string("max-records", "1")
+        output = self._srv.invoke_elem(rootelem)
+        self._check_netapp_error(output, "Setting volume options failed.")
+        print "Volume created. Please disable automatic snapshot creation through GUI, for some reason it does not work through API."

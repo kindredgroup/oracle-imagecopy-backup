@@ -67,7 +67,8 @@ Configuration.substitutions.update({ 'recoverywindow': Configuration.get('recove
                   'oraclehome': oraexec.oraclehome,
                   'tnspath': oraexec.tnspath,
                   'logfile': logfile,
-                  'backupjobenabled': 'true' if Configuration.get('backupjobenabled').upper() == 'TRUE' else 'false'
+                  'backupjobenabled': 'true' if Configuration.get('backupjobenabled').upper() == 'TRUE' else 'false',
+                  'sectionsize': "section size %s" % Configuration.get('sectionsize', 'rman') if Configuration.get('sectionsize', 'rman') else ''
                 })
 
 # Read RMAN templates

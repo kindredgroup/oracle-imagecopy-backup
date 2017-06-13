@@ -170,3 +170,9 @@ class ZFSSA(SnapHandler):
         if r != 204:
             error("Dropping clone failed. Return code: %d" % r)
             raise Exception(self._exceptionbase, "Dropping clone failed. Return code: %d" % r)
+
+    def createvolume(self):
+        payload = { 'name': self._filesystem }
+        ret_code = self._http.post(['pools', self._pool, 'projects', self._project, 'filesystems'], payload)
+        if ret_code != 201:
+            raise Exception(self._exceptionbase, "Failed to create file system")

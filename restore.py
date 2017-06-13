@@ -2,7 +2,7 @@
 
 import os, sys, errno, pytz
 from datetime import datetime
-from backupcommon import BackupLock, BackupLogger, info, debug, error, exception, Configuration, scriptpath
+from backupcommon import BackupLock, BackupLogger, info, debug, error, exception, Configuration, scriptpath, UIElement
 from restorecommon import RestoreDB
 from tempfile import TemporaryFile
 from tzlocal import get_localzone
@@ -17,93 +17,25 @@ def printhelp():
     print "Usage: restore.py <configuration_file_name without directory> <config>"
     sys.exit(2)
 
-def is_dir_writable(path):
-    try:
-        f = TemporaryFile(dir = path)
-        f.close()
-    except OSError as e:
-        if e.errno == errno.EACCES:
-            return False
-        e.filename = path
-        raise
-    return True
-
-def ask_directory(question, demand_empty=True):
-    path = None
-    while True:
-        answer = raw_input("%s " % question)
-        if answer is None or answer.strip() == "":
-            print "Answer is required"
-            continue
-        path = answer.strip()
-        if not os.path.exists(path) or not os.path.isdir(path):
-            print "Specified path does not exist or is not directory"
-            continue
-        if not is_dir_writable(path):
-            print "Specified path is not writable"
-            continue
-        if demand_empty and os.listdir(path):
-            print "Specified path must be empty"
-            continue
-        break
-    return path
-
-def ask_yn(question):
-    answer = None
-    while True:
-        answer = raw_input("%s? (y/n) " % question)
-        answer = answer.strip().upper()
-        if answer not in ['Y','N']:
-            print "Invalid input"
-            continue
-        break
-    return answer
-
-def ask_timestamp(question):
-    dt = None
-    while True:
-        answer = raw_input("%s: (yyyy-mm-dd hh24:mi:ss) " % question)
-        answer = answer.strip()
-        try:
-            dt = datetime.strptime(answer, "%Y-%m-%d %H:%M:%S")
-        except ValueError as e:
-            print "Input does not match required format"
-            continue
-        break
-    return dt
-
-def ask_string(question, maxlength=None, onlyalnum=False):
-    answer = None
-    while True:
-        answer = raw_input("%s " % question)
-        answer = answer.strip()
-        if maxlength is not None and len(answer) > maxlength:
-            print "Max %d characters allowed" % maxlength
-            continue
-        if onlyalnum and not answer.isalnum():
-            print "Only alphanumeric characters allowed" % maxlength
-            continue
-        break
-    return answer
 
 def ask_user_input():
     global restoreparams, exitvalue
 
-    is_safe = ask_yn("Is this system isolated with no access to production database storage")
+    is_safe = ui.ask_yn("Is this system isolated with no access to production database storage")
     if is_safe != "Y":
         print "Exiting. Please execute this script in an isolated environment."
         exitvalue = 1
         return
-    restoreparams['mountpath'] = ask_directory("Directory where to mount clone:", False)
-    restoreparams['timepoint'] = ask_timestamp("Restore database to time point")
-    is_utc = ask_yn("Was the timestamp in UTC (answer N for local time)")
+    restoreparams['mountpath'] = ui.ask_directory("Directory where to mount clone:", False)
+    restoreparams['timepoint'] = ui.ask_timestamp("Restore database to time point")
+    is_utc = ui.ask_yn("Was the timestamp in UTC (answer N for local time)")
     if is_utc == "Y":
         tz = pytz.utc
     else:
         tz = get_localzone()
     restoreparams['timepoint'] = tz.localize(restoreparams['timepoint'])
     restore.set_restore_target_time(restoreparams['timepoint'])
-    restoreparams['sid'] = ask_string("Target instance name:", 8, True)
+    restoreparams['sid'] = ui.ask_string("Target instance name:", 8, True)
     #
     splitter = "######################################"
     print splitter
@@ -117,7 +49,7 @@ def ask_user_input():
     print "Restored from snapshot: %s" % restore.sourcesnapid
     #
     print ""
-    is_ok = ask_yn("Are these parameters correct")
+    is_ok = ui.ask_yn("Are these parameters correct")
     if is_ok != "Y":
         print "Exiting. Please execute this script again."
         exitvalue = 1
@@ -133,7 +65,7 @@ def exec_restore():
     print ""
     print "mount -t nfs -o rw,bg,hard,nointr,rsize=32768,wsize=32768,tcp,vers=3,timeo=600 %s %s" % (restore.mountstring, restoreparams['mountpath'])
     print ""
-    while ask_yn("Did you execute it") == "N":
+    while ui.ask_yn("Did you execute it") == "N":
         print "Please execute it then."
     # Verify that clone is mounted
     autorestorefile = os.path.join(restoreparams['mountpath'], 'autorestore.cfg')
@@ -180,6 +112,7 @@ if os.geteuid() == 0:
     print "No, I will not run as root."
     sys.exit(0)
 
+ui = UIElement()
 configname = sys.argv[2]
 Configuration.init(defaultsection=configname, configfilename=sys.argv[1], additionaldefaults={'customverifydate': 'select max(time_dp) from sys.smon_scn_time',
     'autorestoreenabled': '1', 'autorestoreinstancenumber': '1', 'autorestorethread': '1'})

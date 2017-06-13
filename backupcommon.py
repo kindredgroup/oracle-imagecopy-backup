@@ -59,7 +59,7 @@ class Configuration:
     _defaults = {'registercatalog': 'false', 'hasdataguard': 'false',
                  'dosnapshot': 'true', 'gimanaged': 'true',
                  'schedulebackup': 'FREQ=DAILY', 'schedulearchlog': 'FREQ=HOURLY;INTERVAL=6',
-                 'snapexpirationmonths': 0, 'backupjobenabled': 'true'}
+                 'snapexpirationmonths': 0, 'backupjobenabled': 'true', 'sectionsize': ''}
 
     @classmethod
     def getconfigname(cls):
@@ -285,6 +285,11 @@ class SnapHandler(object):
         # 10.10.10.10:/clonename
         pass
 
+    @abstractmethod
+    def createvolume(self):
+        # Creates new volume for storing backups
+        pass
+
     def clean(self):
         max_age_days = int(Configuration.get('snapexpirationdays'))
         max_age_months = int(Configuration.get('snapexpirationmonths'))
@@ -356,3 +361,92 @@ class SnapHandler(object):
                 sourcesnap = s['id']
                 break
         return sourcesnap
+
+# Class for outputting some UI elements, like prompts
+class UIElement(object):
+
+    def __init__(self):
+        pass
+    
+    def _is_dir_writable(self, path):
+        try:
+            f = TemporaryFile(dir = path)
+            f.close()
+        except OSError as e:
+            if e.errno == errno.EACCES:
+                return False
+            e.filename = path
+            raise
+        return True
+    
+    def ask_directory(self, question, demand_empty=True, demand_writable=True):
+        path = None
+        while True:
+            answer = raw_input("%s " % question)
+            if answer is None or answer.strip() == "":
+                print "Answer is required"
+                continue
+            path = answer.strip()
+            if not os.path.exists(path) or not os.path.isdir(path):
+                print "Specified path does not exist or is not directory"
+                continue
+            if demand_writable and not self._is_dir_writable(path):
+                print "Specified path is not writable"
+                continue
+            if demand_empty and os.listdir(path):
+                print "Specified path must be empty"
+                continue
+            break
+        return path
+    
+    def ask_yn(self, question):
+        answer = None
+        while True:
+            answer = raw_input("%s? (y/n) " % question)
+            answer = answer.strip().upper()
+            if answer not in ['Y','N']:
+                print "Invalid input"
+                continue
+            break
+        return answer
+    
+    def ask_timestamp(self, question):
+        dt = None
+        while True:
+            answer = raw_input("%s: (yyyy-mm-dd hh24:mi:ss) " % question)
+            answer = answer.strip()
+            try:
+                dt = datetime.strptime(answer, "%Y-%m-%d %H:%M:%S")
+            except ValueError as e:
+                print "Input does not match required format"
+                continue
+            break
+        return dt
+    
+    def ask_string(self, question, maxlength=None, onlyalnum=False):
+        answer = None
+        while True:
+            answer = raw_input("%s " % question)
+            answer = answer.strip()
+            if maxlength is not None and len(answer) > maxlength:
+                print "Max %d characters allowed" % maxlength
+                continue
+            if onlyalnum and not answer.isalnum():
+                print "Only alphanumeric characters allowed" % maxlength
+                continue
+            break
+        return answer
+    
+    def ask_size(self, question):
+        answer = None
+        while True:
+            answer = raw_input("%s (suffix with unit M, G or T): " % question)
+            answer = answer.strip().upper()
+            if answer[-1:] not in ['M','G','T']:
+                print "Suffix your input with unit M, G or T"
+                continue
+            if not answer[:-1].isdigit():
+                print "%s is not an integer" % answer[:-1]
+                continue
+            break
+        return answer
