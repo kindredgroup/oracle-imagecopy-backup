@@ -10,8 +10,8 @@ from tempfile import mkstemp, TemporaryFile
 
 def printhelp():
     print "Usage: autorestore.py <configuration_file_name without directory> [config]"
-    print "  [config] is optional, if missed then action is performed on all databases in config file."
-    print "  [config] could either be database unique name to be restore or on of the repository actions:"
+    print "  [!][config] is optional, if missed then action is performed on all databases in config file. If it starts with !, then specified config is excluded."
+    print "  [config] could either be database unique name to be restored or on of the repository actions:"
     print "    --createcatalog"
     print "    --listvalidationdates"
     sys.exit(2)
@@ -33,32 +33,15 @@ if (not os.getenv('AUTORESTORE_SAFE_SANDBOX')) or (os.environ['AUTORESTORE_SAFE_
 
 Configuration.init('autorestore', configfilename=sys.argv[1], additionaldefaults={'customverifydate': 'select max(time_dp) from sys.smon_scn_time','autorestoreenabled': '1',
     'autorestoreinstancenumber': '1', 'autorestorethread': '1'})
-validatechance = int(Configuration.get('autorestorevalidatechance', 'autorestore'))
-validatemodulus = int(Configuration.get('autorestoremodulus', 'autorestore'))
 oexec = OracleExec(oraclehome=Configuration.get('oraclehome', 'generic'), tnspath=os.path.join(scriptpath(), Configuration.get('tnsadmin', 'generic')))
 restoretemplate = BackupTemplate('restoretemplate.cfg')
-
-# Does the backup destination exist?
-restoredest = Configuration.get('autorestoredestination','autorestore')
-mountdest = Configuration.get('autorestoremountpoint','autorestore')
-logdir = Configuration.get('autorestorelogdir','autorestore')
-Configuration.substitutions.update({
-    'logdir': logdir,
-    'autorestorecatalog': Configuration.get('autorestorecatalog','autorestore')
-})
-if restoredest is None or not os.path.exists(restoredest) or not os.path.isdir(restoredest):
-    print "Restore directory %s not found or is not a proper directory" % restoredest
-    sys.exit(2)
-if mountdest is None or not os.path.exists(mountdest) or not os.path.isdir(mountdest):
-    print "Clone mount directory %s not found or is not a proper directory" % mountdest
-    sys.exit(2)
 
 exitstatus = 0
 
 # System actions
 
 # Clean destination directory
-def cleantarget():
+def cleantarget(restoredest):
     debug("ACTION: Cleaning destination directory %s" % restoredest)
     for root, dirs, files in os.walk(restoredest, topdown=False):
         for name in files:
@@ -67,11 +50,17 @@ def cleantarget():
             os.rmdir(os.path.join(root, name))
 
 def validationdate(database):
+    tmpsection = Configuration.defaultsection
+    Configuration.defaultsection = database
+    validatemodulus = int(Configuration.get('autorestoremodulus', 'autorestore'))
+    Configuration.defaultsection = tmpsection
+    #
     days_since_epoch = (datetime.utcnow() - datetime(1970,1,1)).days
     try:
         hashstring = Configuration.get('stringforvalidationmod', database)
     except:
         hashstring = database
+    #
     mod1 = days_since_epoch % validatemodulus
     mod2 = hash(hashstring) % validatemodulus
     validatecorruption = mod1 == mod2
@@ -83,6 +72,23 @@ def runrestore(database):
     global exitstatus
     #
     Configuration.defaultsection = database
+    #
+    restoredest = Configuration.get('autorestoredestination','autorestore')
+    mountdest = Configuration.get('autorestoremountpoint','autorestore')
+    logdir = Configuration.get('autorestorelogdir','autorestore')
+    Configuration.substitutions.update({
+        'logdir': logdir,
+        'autorestorecatalog': Configuration.get('autorestorecatalog','autorestore')
+    })
+    if restoredest is None or not os.path.exists(restoredest) or not os.path.isdir(restoredest):
+        print "Restore directory %s not found or is not a proper directory" % restoredest
+        sys.exit(2)
+    if mountdest is None or not os.path.exists(mountdest) or not os.path.isdir(mountdest):
+        print "Clone mount directory %s not found or is not a proper directory" % mountdest
+        sys.exit(2)
+    #
+    validatechance = int(Configuration.get('autorestorevalidatechance', 'autorestore'))
+    validatemodulus = int(Configuration.get('autorestoremodulus', 'autorestore'))
     # Reinitialize logging
     BackupLogger.init(os.path.join(logdir, "%s-%s.log" % (datetime.now().strftime('%Y%m%dT%H%M%S'), database)), database)
     BackupLogger.clean()
@@ -95,13 +101,13 @@ def runrestore(database):
     Configuration.substitutions.update({
         'logfile': BackupLogger.logfile
     })
-    cleantarget()
+    cleantarget(restoredest)
     #
     success = False
     #
     if validatemodulus > 0:
         # Validation based on modulus
-        validationinfo = validationdate(database)
+        validationinfo = validationdate(database, validatechance, validatemodulus)
         validatecorruption = validationinfo[0]
         if not validatecorruption:
             debug("Next database validation in %d days: %s" % ( validationinfo[1], validationinfo[2] ))
@@ -143,13 +149,49 @@ def runrestore(database):
         debug("Logging the result to catalog failed.")
     # Finish up
     info("Restore %s, elapsed time: %s" % ('successful' if success else 'failed', restore.endtime-restore.starttime))
+    # Run ADRCI to clean up diag
+    adrage = int(Configuration.get('logretention','generic'))*1440
+    f1 = mkstemp(suffix=".adi")
+    ftmp = os.fdopen(f1[0], "w")
+    ftmp.write("set base %s\n" % logdir)
+    ftmp.write("show homes\n")
+    ftmp.close()
+    f2 = mkstemp(suffix=".adi")
+    ftmp2 = os.fdopen(f2[0], "w")
+    ftmp2.write("set base %s\n" % logdir)
+    with TemporaryFile() as f:
+        try:
+            oexec.adrci(f1[1], f)
+            f.seek(0,0)
+            output = f.read()
+            startreading = False
+            for line in output.splitlines():
+                if line.startswith('ADR Homes:'):
+                    startreading = True
+                elif startreading:
+                    ftmp2.write("set home %s\n" % line.strip())
+                    ftmp2.write("purge -age %d\n" % adrage)
+            ftmp2.close()
+            oexec.adrci(f2[1], f)
+        except:
+            print "Executing ADRCI failed."
+        finally:
+            os.unlink(f1[1])
+            os.unlink(f2[1])
+    #
     BackupLogger.close(True)
 
 # UI
 
 def loopdatabases():
     excludelist = ['generic','rman','zfssa','autorestore','netapp']
-    for configname in Configuration.sections():
+    sections = Configuration.sections()
+    if action is not None:
+        if action[0] == "!":
+            excludelist.append(action[1:])
+        else:
+            sections = [action]
+    for configname in sections:
         if configname not in excludelist:
             if Configuration.get('autorestoreenabled', configname) == '1':
                 yield configname
@@ -160,63 +202,33 @@ if len(sys.argv) == 3:
 
 if action == '--listvalidationdates':
     # This action does not need a lock
-    if validatemodulus > 0:
+    if int(Configuration.get('autorestoremodulus', 'autorestore')) > 0:
+        action = None
         for configname in loopdatabases():
             validationinfo = validationdate(configname)
             print "%s: %s (in %d days)" % (configname, validationinfo[2], validationinfo[1])
     else:
+        validatechance = int(Configuration.get('autorestorevalidatechance', 'autorestore'))
         if validatechance > 0:
             print "Validation is based on chance, probability 1/%d" % validatechance
         else:
             print "Database validation is not turned on"
 else:
-    # Actions that need a lock
-    lock = BackupLock(Configuration.get('autorestorelogdir','autorestore'))
-    try:
-        if action is not None:
-            if action.startswith('--'):
-                if action == '--createcatalog':
-                    BackupLogger.init(os.path.join(logdir, "%s-config.log" % (datetime.now().strftime('%Y%m%dT%H%M%S'))), 'config')
-                    info("Logfile: %s" % BackupLogger.logfile)
-                    Configuration.substitutions.update({'logfile': BackupLogger.logfile})
-                    oexec.sqlplus(restoretemplate.get('createcatalog'), silent=False)
-            else:
-                runrestore(action)
-        else:
-            # Loop through all sections
-            for configname in loopdatabases():
+    if action is not None and action.startswith('--'):
+        if action == '--createcatalog':
+            BackupLogger.init(os.path.join(Configuration.get('autorestorelogdir','autorestore'), "%s-config.log" % (datetime.now().strftime('%Y%m%dT%H%M%S'))), 'config')
+            info("Logfile: %s" % BackupLogger.logfile)
+            Configuration.substitutions.update({'logfile': BackupLogger.logfile})
+            oexec.sqlplus(restoretemplate.get('createcatalog'), silent=False)
+    else:
+        # Loop through all sections
+        for configname in loopdatabases():
+            Configuration.defaultsection = configname
+            lock = BackupLock(Configuration.get('autorestorelogdir','autorestore'))
+            try:
                 runrestore(configname)
-            # Run ADRCI to clean up diag
-            adrage = int(Configuration.get('logretention','generic'))*1440
-            f1 = mkstemp(suffix=".adi")
-            ftmp = os.fdopen(f1[0], "w")
-            ftmp.write("set base %s\n" % logdir)
-            ftmp.write("show homes\n")
-            ftmp.close()
-            f2 = mkstemp(suffix=".adi")
-            ftmp2 = os.fdopen(f2[0], "w")
-            ftmp2.write("set base %s\n" % logdir)
-            with TemporaryFile() as f:
-                try:
-                    oexec.adrci(f1[1], f)
-                    f.seek(0,0)
-                    output = f.read()
-                    startreading = False
-                    for line in output.splitlines():
-                        if line.startswith('ADR Homes:'):
-                            startreading = True
-                        elif startreading:
-                            ftmp2.write("set home %s\n" % line.strip())
-                            ftmp2.write("purge -age %d\n" % adrage)
-                    ftmp2.close()
-                    oexec.adrci(f2[1], f)
-                except:
-                    print "Executing ADRCI failed."
-                finally:
-                    os.unlink(f1[1])
-                    os.unlink(f2[1])
-    finally:
-        lock.release()
+            finally:
+                lock.release()
 
     print "Exitstatus is %d" % exitstatus
     sys.exit(exitstatus)
