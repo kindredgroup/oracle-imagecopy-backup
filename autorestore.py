@@ -107,7 +107,7 @@ def runrestore(database):
     #
     if validatemodulus > 0:
         # Validation based on modulus
-        validationinfo = validationdate(database, validatechance, validatemodulus)
+        validationinfo = validationdate(database)
         validatecorruption = validationinfo[0]
         if not validatecorruption:
             debug("Next database validation in %d days: %s" % ( validationinfo[1], validationinfo[2] ))
