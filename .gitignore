@@ -1,6 +1,6 @@
 *.pyc
 wallet*
 *demo*
-zfscredentials.cfg
+*credentials.cfg
 backup.cfg
 .ftpconfig
