@@ -108,7 +108,7 @@ class SoftNAS(SnapHandler):
                 'creation': datetime.utcfromtimestamp(float(s['creation'])),
                 'numclones':  0,
                 'space_total': s['refer'],
-                'space_unique': s['refer']
+                'space_unique': 0
             } )
         if not sortbycreation:
             return snapshots
