@@ -1,7 +1,7 @@
-import requests, json, operator, urllib, os, re
-from backupcommon import SnapHandler, Configuration, scriptpath, size2str, info, error, debug
+import requests, json, operator, urllib, os
+from backupcommon import SnapHandler, Configuration, scriptpath, info, error, debug
 from ConfigParser import SafeConfigParser
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class SoftNASHttp(object):
     _timeout = 300 # HTTP call timeout in seconds
@@ -35,6 +35,12 @@ class SoftNASHttp(object):
 
 class SoftNAS(SnapHandler):
     _exceptionbase = "softnas"
+    _serveraddress = None
+    _pool = None
+    _filesystem = None
+    _username = None
+    _password = None
+    _http = None
 
     def __init__(self, configname):
         credfilename = os.path.join(scriptpath(), 'softnascredentials.cfg')
@@ -46,7 +52,8 @@ class SoftNAS(SnapHandler):
         self._username = credconfig.get('credentials','user')
         self._password = credconfig.get('credentials','password')
         #
-        url = "https://%s/softnas" % Configuration.get('serveraddress', 'softnas')
+        self._serveraddress = Configuration.get('serveraddress', 'softnas')
+        url = "https://%s/softnas" % self._serveraddress
         self._pool = Configuration.get('pool', 'softnas')
         self._filesystem = configname
         #
@@ -59,9 +66,11 @@ class SoftNAS(SnapHandler):
     def _logout(self):
         r = self._http.get('logout.php')
 
-    def _request(self, opcode, parameters={}):
+    def _request(self, opcode, parameters={}, sendJSON=False):
         payload = {'opcode': opcode}
         payload.update(parameters)
+        if sendJSON:
+            payload = json.dumps(payload)
         self._login()
         try:
             j,r = self._http.post('snserver/snserv.php', payload)
@@ -70,6 +79,14 @@ class SoftNAS(SnapHandler):
         finally:
             self._logout()
         return j
+    
+    def _listvolumes(self):
+        j = self._request('volumes', {'start': 0, 'limit': 10000, 'pool': self._pool})
+        volumes = []
+        for v in j['records']:
+            if v['pool'] == self._pool:
+                volumes.append(v)
+        return volumes
 
     ###
 
@@ -84,6 +101,7 @@ class SoftNAS(SnapHandler):
 
     def listsnapshots(self, sortbycreation=False, sortreverse=False):
         j = self._request('snapshotlist', {'pool_name': "%s/%s" % (self._pool, self._filesystem)})
+        self._listvolumes()
         snapshots = []
         for s in j['records']:
             snapshots.append( {'id': s['snapshot_name'],
@@ -98,22 +116,30 @@ class SoftNAS(SnapHandler):
             return sorted(snapshots, key=operator.itemgetter('creation'), reverse=sortreverse)
 
     def filesystem_info(self, filesystemname=None):
-        pass
-
-    def listclones(self):
-        pass
+        volumes = []
+        for v in self._listvolumes():
+            if filesystemname is None or v['vol_name'] == filesystemname:
+                volumes.append({ 'origin': None, 'clonename': v['vol_name'], 'mountpoint': "%s:%s" % (self._serveraddress, v['vol_path']) })
+        return volumes
 
     def mountstring(self, filesystemname):
-        pass
+        mountpoint = ""
+        for v in self.filesystem_info(filesystemname):
+            mountpoint = v['mountpoint']
+            break
+        return mountpoint
 
     def getsnapinfo(self, snapstruct):
         return snapstruct
 
-    def clone(self, snapid, clonename):
-        pass
-
     def dropclone(self, cloneid):
-        pass
+        self._request('deletevolume', {'vol_name': cloneid, 'pool': self._pool}, True)
 
     def createvolume(self):
-        pass
+        self._request('createvolume', {'vol_name': self._filesystem, 'pool': self._pool, 'vol_type': 'filesystem', 'provisioning': 'thin', 'exportNFS': 'on', 'compression': 'on'})
+
+    def listclones(self):
+        raise Exception(self._exceptionbase, 'SoftNAS does not support naming clones, so cloning features are disabled.')
+
+    def clone(self, snapid, clonename):
+        raise Exception(self._exceptionbase, 'SoftNAS does not support naming clones, so cloning features are disabled.')

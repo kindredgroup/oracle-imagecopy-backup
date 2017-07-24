@@ -40,9 +40,10 @@ Requirements:
 Supported storage:
 * Netapp ONTAP
 * Oracle ZFS Storage Appliance
+* SoftNAS (without automatic cloning - so no autorestore)
 * Others... it is easy to extend for other systems :)
 
-When running on Amazon Web Services (AWS) cloud platform, I recommend using [Netapp Cloud Storage Solutions](https://aws.amazon.com/testdrive/netapp/) to provide the backup storage, since currently Amazon Elastic File System (EFS) does not implement the features required for this system to work.
+When running on Amazon Web Services (AWS) cloud platform or any other public cloud, I recommend using [Netapp Cloud Storage Solutions](https://aws.amazon.com/testdrive/netapp/) (full support) or [SoftNAS](https://www.softnas.com/) (no autorestore) to provide the backup storage, since currently Amazon Elastic File System (EFS) does not implement the features required for this system to work.
 
 ## Setting up backup
 
