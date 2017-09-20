@@ -202,10 +202,15 @@ def imagecopywithsnap():
         for r in cleaningresult:
             debug(r['infostring'])
     #
+    info("Dump additional information about the environment to the log file")
     if gimanaged:
         p = Popen([os.path.join(scriptpath, 'dbinfo.py'), configsection], stdout=PIPE, stderr=None, stdin=None)
         output,outerr = p.communicate()
         debug(output)
+    # Write ORACLE_HOME patch information to log file
+    p = Popen([os.path.join(Configuration.get('oraclehome', 'generic'), 'OPatch', 'opatch'), 'lsinventory'], stdout=PIPE, stderr=None, stdin=None)
+    output,outerr = p.communicate()
+    debug(output)    
     #
     info("Write database parameters for autorestore")
     with open(restoreparamfile, 'w') as f:
