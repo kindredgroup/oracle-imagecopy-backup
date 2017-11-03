@@ -122,16 +122,18 @@ class RestoreDB(object):
         debug('ACTION: startup nomount')
         self._exec_sqlplus(self._restoretemplate.get('startupnomount'))
         debug('ACTION: mount database and catalog files')
-        self._exec_rman(self._restoretemplate.get('mountandcatalog'))
+        self._exec_rman(self._restoretemplate.get('rmanmount'))
+        self._exec_sqlplus(self._restoretemplate.get('clearlogs'))
+        self._exec_rman(self._restoretemplate.get('rmancatalog'))
         if self._dbparams['bctfile']:
-          debug('ACTION: disable block change tracking')
-          self._exec_sqlplus(self._restoretemplate.get('disablebct'))
+            debug('ACTION: disable block change tracking')
+            self._exec_sqlplus(self._restoretemplate.get('disablebct'))
         debug('ACTION: create missing datafiles')
         output = self._exec_sqlplus(self._restoretemplate.get('switchdatafiles'), returnoutput=True)
         switchdfscript = ""
         for line in output.splitlines():
-          if line.startswith('RENAMEDF-'):
-            switchdfscript+= "%s\n" % line.strip()[9:]
+            if line.startswith('RENAMEDF-'):
+                switchdfscript+= "%s\n" % line.strip()[9:]
         debug('ACTION: switch and recover')
         self._exec_rman("%s\n%s" % (switchdfscript, self._restoretemplate.get('recoverdatafiles')))
 
