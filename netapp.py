@@ -1,6 +1,6 @@
 import os, operator
 from backupcommon import SnapHandler, Configuration, scriptpath, info, error, debug, UIElement
-from ConfigParser import SafeConfigParser
+from ConfigParser import SafeConfigParser, NoOptionError
 from datetime import datetime, timedelta
 from NaServer import *
 
@@ -8,11 +8,12 @@ class Netapp(SnapHandler):
     _exceptionbase = "netapp"
     _blocksize = 1024
     _filer = None
+    _cacert = None
 
     def __init__(self, configname):
         zfscredfilename = os.path.join(scriptpath(), 'netappcredentials.cfg')
         if not os.path.isfile(zfscredfilename):
-          raise Exception(self._exceptionbase, "Configuration file %s not found" % zfscredfilename)
+            raise Exception(self._exceptionbase, "Configuration file %s not found" % zfscredfilename)
         # Authentication information
         zfscredconfig = SafeConfigParser()
         zfscredconfig.read(zfscredfilename)
@@ -20,6 +21,16 @@ class Netapp(SnapHandler):
         #
         self._filer = Configuration.get('filer', 'netapp')
         self._srv = NaServer(self._filer, 1, 1)
+        # Check if CA certificate validation is needed
+        try:
+            self._cacert = os.path.join(scriptpath(), 'certs', Configuration.get('cacert', 'netapp'))
+        except NoOptionError:
+            self._cacert = None
+        if self._cacert:
+            self._srv.set_ca_certs(self._cacert)
+            self._srv.set_server_cert_verification(True)
+            self._srv.set_hostname_verification(False)
+        #
         self._srv.set_admin_user(zfscredconfig.get('netappcredentials','user'), zfscredconfig.get('netappcredentials','password'))
         self._volprefix = Configuration.get('volumeprefix', 'netapp')
         self._volname = "%s%s" % (self._volprefix, configname)
