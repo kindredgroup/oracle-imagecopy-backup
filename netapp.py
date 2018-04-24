@@ -10,6 +10,18 @@ class Netapp(SnapHandler):
     _filer = None
     _cacert = None
 
+    def _read_netapp_config(self, attribute, zfscredconfig):
+        # Try reading Netapp configuration first from the credentials file, then fail over to main configuration file
+        value = None
+        try:
+            return zfscredconfig.get('netapp', attribute)
+        except NoOptionError:
+            pass
+        try:
+            return Configuration.get(attribute, 'netapp')
+        except NoOptionError:
+            raise NoOptionError("Attribute %s not found" % attribute)
+        
     def __init__(self, configname):
         zfscredfilename = os.path.join(scriptpath(), 'netappcredentials.cfg')
         if not os.path.isfile(zfscredfilename):
@@ -17,13 +29,12 @@ class Netapp(SnapHandler):
         # Authentication information
         zfscredconfig = SafeConfigParser()
         zfscredconfig.read(zfscredfilename)
-        zfsauth = (zfscredconfig.get('netappcredentials','user'), zfscredconfig.get('netappcredentials','password'))
         #
-        self._filer = Configuration.get('filer', 'netapp')
+        self._filer = self._read_netapp_config('filer', zfscredconfig)
         self._srv = NaServer(self._filer, 1, 1)
         # Check if CA certificate validation is needed
         try:
-            self._cacert = os.path.join(scriptpath(), 'certs', Configuration.get('cacert', 'netapp'))
+            self._cacert = os.path.join(scriptpath(), 'certs', self._read_netapp_config('cacert', zfscredconfig))
         except NoOptionError:
             self._cacert = None
         if self._cacert:
@@ -32,7 +43,7 @@ class Netapp(SnapHandler):
             self._srv.set_hostname_verification(False)
         #
         self._srv.set_admin_user(zfscredconfig.get('netappcredentials','user'), zfscredconfig.get('netappcredentials','password'))
-        self._volprefix = Configuration.get('volumeprefix', 'netapp')
+        self._volprefix = self._read_netapp_config('volumeprefix', zfscredconfig)
         self._volname = "%s%s" % (self._volprefix, configname)
         super(Netapp, self).__init__(configname)
 
