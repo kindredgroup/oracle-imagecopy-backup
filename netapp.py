@@ -1,6 +1,6 @@
 import os, operator
 from backupcommon import SnapHandler, Configuration, scriptpath, info, error, debug, UIElement
-from ConfigParser import SafeConfigParser, NoOptionError
+from ConfigParser import SafeConfigParser, NoOptionError, NoSectionError
 from datetime import datetime, timedelta
 from NaServer import *
 
@@ -15,11 +15,11 @@ class Netapp(SnapHandler):
         value = None
         try:
             return zfscredconfig.get('netapp', attribute)
-        except NoOptionError:
+        except (NoOptionError, NoSectionError) as e:
             pass
         try:
             return Configuration.get(attribute, 'netapp')
-        except NoOptionError:
+        except (NoOptionError, NoSectionError) as e:
             raise NoOptionError("Attribute %s not found" % attribute)
         
     def __init__(self, configname):
@@ -44,6 +44,10 @@ class Netapp(SnapHandler):
         #
         self._srv.set_admin_user(zfscredconfig.get('netappcredentials','user'), zfscredconfig.get('netappcredentials','password'))
         self._volprefix = self._read_netapp_config('volumeprefix', zfscredconfig)
+        try:
+            self._mounthost = self._read_netapp_config('mounthost', zfscredconfig)  
+        except NoOptionError:
+            self._mounthost = self._filer
         self._volname = "%s%s" % (self._volprefix, configname)
         super(Netapp, self).__init__(configname)
 
@@ -98,7 +102,7 @@ class Netapp(SnapHandler):
 
     def mountstring(self, filesystemname):
         info = self.filesystem_info(filesystemname)
-        return "%s:%s" % (self._filer, info['mountpoint'])
+        return "%s:%s" % (self._mounthost, info['mountpoint'])
 
     def snap(self):
         snapname = "%s_%s" % (self._volname, datetime.now().strftime('%Y%m%dT%H%M%S'))
