@@ -35,7 +35,7 @@ class Netapp(SnapHandler):
         # Check if CA certificate validation is needed
         try:
             self._cacert = os.path.join(scriptpath(), 'certs', self._read_netapp_config('cacert', zfscredconfig))
-        except NoOptionError:
+        except:
             self._cacert = None
         if self._cacert:
             self._srv.set_ca_certs(self._cacert)
@@ -46,7 +46,7 @@ class Netapp(SnapHandler):
         self._volprefix = self._read_netapp_config('volumeprefix', zfscredconfig)
         try:
             self._mounthost = self._read_netapp_config('mounthost', zfscredconfig)  
-        except NoOptionError:
+        except:
             self._mounthost = self._filer
         self._volname = "%s%s" % (self._volprefix, configname)
         super(Netapp, self).__init__(configname)
