@@ -21,6 +21,7 @@ class RestoreDB(object):
     sourcesnapid = ""
     _successful_clone = False
     _successful_mount = False
+    _mountpaths = []
     targettime = None
 
     def __init__(self, configname):
@@ -32,6 +33,7 @@ class RestoreDB(object):
         if mountdest is None or not os.path.exists(mountdest) or not os.path.isdir(mountdest):
             raise Exception('restore', "Mount directory %s not found or is not a proper directory" % mountdest)
         self._mountdest = mountdest
+        self._root_mountdest = mountdest
 
     def set_restore_path(self, restoredest):
         if restoredest is None or not os.path.exists(restoredest) or not os.path.isdir(restoredest):
@@ -78,13 +80,32 @@ class RestoreDB(object):
         self._successful_clone = True
 
     def _mount(self):
-        check_call(['mount', self._mountdest])
+        check_call(['mount', self._root_mountdest])
         self._successful_mount = True
 
     def _unmount(self):
-        check_call(['umount', self._mountdest])
+        check_call(['umount', self._root_mountdest])
 
     def _set_parameters(self):
+        # Detect if mountpath is actually a namespace containing multiple volumes
+        orig_mount_dest = self._mountdest
+        if not os.path.isfile(os.path.join(orig_mount_dest, 'autorestore.cfg')):
+            location_correct = False
+            for item in os.listdir(orig_mount_dest):
+                item_full_path = os.path.join(orig_mount_dest, item)
+                if os.path.isdir(item_full_path):
+                    self._mountpaths.append(item_full_path)
+                    if os.path.isfile(os.path.join(item_full_path, 'autorestore.cfg')):
+                        location_correct = True
+                        self._mountdest = item_full_path
+            if not location_correct:
+                raise Exception('restore', 'Mount path is not correct, autorestore.cfg was not found')
+        else:
+            self._mountpaths.append(self._mountdest)
+        debug("All datafile mountpaths: %s" % self._mountpaths)
+        debug("Main datafile mountpath: %s" % self._mountdest)
+        debug("Location for temporary init.ora and other files: %s" % self._restoredest)
+        #
         dbconfig = SafeConfigParser()
         dbconfig.read(os.path.join(self._mountdest, 'autorestore.cfg'))
         self._dbparams['dbname'] = dbconfig.get('dbparams','db_name')
@@ -93,6 +114,10 @@ class RestoreDB(object):
         else:
             self._dbparams['restoretarget'] = self.targettime.astimezone(get_localzone())
         self._dbparams['bctfile'] = dbconfig.get('dbparams','bctfile')
+        catalogstatements = []
+        for item in self._mountpaths:
+            catalogstatements.append("catalog start with '%s/archivelog/' noprompt;" % item) 
+            catalogstatements.append("catalog start with '%s/data_' noprompt;" % item) 
         Configuration.substitutions.update({
             'db_name': self._dbparams['dbname'],
             'db_compatible': dbconfig.get('dbparams','compatible'),
@@ -108,6 +133,7 @@ class RestoreDB(object):
             'bctfile': self._dbparams['bctfile'],
             'autorestoredestination': self._restoredest,
             'mountdestination': self._mountdest,
+            'catalogstatements': "\n".join(catalogstatements)
         })
         try:
             Configuration.substitutions.update({'cdb': dbconfig.get('dbparams','enable_pluggable_database')})
@@ -139,8 +165,9 @@ class RestoreDB(object):
 
     # Orchestrator
     def pit_restore(self, mountpath, sid):
-        self._restoredest = mkdtemp(prefix="restore", dir=mountpath)
-        self._mountdest = mountpath
+        self.set_mount_path(mountpath)
+        self.set_restore_path(mkdtemp(prefix="restore", dir=self._mountdest))
+        #
         self._restoresid = sid
         self._set_parameters()
         self._createinitora()

@@ -67,12 +67,6 @@ def exec_restore():
     print ""
     while ui.ask_yn("Did you execute it") == "N":
         print "Please execute it then."
-    # Verify that clone is mounted
-    autorestorefile = os.path.join(restoreparams['mountpath'], 'autorestore.cfg')
-    if not os.path.isfile(autorestorefile):
-        print "The mounted path does not look correct, file %s not found" % autorestorefile
-        exitvalue = 1
-        return
     #
     debug("Oracle home: %s" % Configuration.get("oraclehome", "generic"))
     debug("Clone mount path: %s" % restoreparams['mountpath'])
