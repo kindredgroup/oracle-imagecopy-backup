@@ -3,6 +3,7 @@ from backupcommon import SnapHandler, Configuration, scriptpath, info, error, de
 from ConfigParser import SafeConfigParser, NoOptionError, NoSectionError
 from datetime import datetime, timedelta
 from NaServer import *
+from time import sleep
 
 class Netapp(SnapHandler):
     _exceptionbase = "netapp"
@@ -79,6 +80,7 @@ class Netapp(SnapHandler):
         return round(float(volsize[:-1])*(2**factor))
 
     def _get_volume_info(self, volname):
+        debug("Querying info for volume: %s" % volname)
         elem = NaElement("volume-get-iter")
         elem.child_add_string("max-records", "1")
         #
@@ -115,7 +117,7 @@ class Netapp(SnapHandler):
                 info['mountpoint'] = ss.child_get('volume-id-attributes').child_get_string('junction-path')
                 info['export-policy'] = ss.child_get('volume-export-attributes').child_get_string('policy')
                 cloneattr = ss.child_get('volume-clone-attributes')
-                if cloneattr:
+                if cloneattr and cloneattr.child_get('volume-clone-parent-attributes'):
                     info['origin'] = cloneattr.child_get('volume-clone-parent-attributes').child_get_string('name')
                 else:
                     info['origin'] = None
@@ -125,8 +127,10 @@ class Netapp(SnapHandler):
         debug("Dropping volume: %s" % volname)
         output = self._srv.invoke("volume-unmount", "volume-name", volname)
         self._check_netapp_error(output, "Unmounting volume %s failed" % volname)
+        sleep(10)
         output = self._srv.invoke("volume-offline", "name", volname)
         self._check_netapp_error(output, "Offlining volume %s failed" % volname)
+        sleep(10)
         output = self._srv.invoke("volume-destroy", "name", volname)
         self._check_netapp_error(output, "Dropping volume %s failed" % volname)
     
