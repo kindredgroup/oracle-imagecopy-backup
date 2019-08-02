@@ -43,19 +43,19 @@ print datain
 def printserviceinfo(si):
   if len(si) > 0 and si['enabled']:
     if oracleversion < "12.1":
-      s = "srvctl add service -d %s -s %s -j %s -B %s -r %s" % (configsection, si['name'], si['clb'], si['rlb'], si['preferred'])
+      s = "srvctl add service -d %s -s %s -j %s -B %s -r %s" % (configsection, si.get('name',''), si.get('clb',''), si.get('rlb',''), si.get('preferred',''))
       if si['available']:
         s+= " -a %s" % si['available']
       print s
       if si['edition']:
-        print "srvctl add service -d %s -s %s -t %s" % (configsection, si['name'], si['edition'])
+        print "srvctl add service -d %s -s %s -t %s" % (configsection, si.get('name',''), si.get('edition',''))
     else:
-      s = "srvctl add service -database %s -service %s -preferred %s" % (configsection, si['name'], si['preferred'])
-      if si['available']:
+      s = "srvctl add service -database %s -service %s -preferred %s" % (configsection, si.get('name',''), si.get('preferred',''))
+      if si.get('available', None):
         s+= " -available %s" % si['available']
-      if si['edition']:
+      if si.get('edition', None):
         s+= " -edition %s" % si['edition']
-      if si['pluggable']:
+      if si.get('pluggable', None):
         s+= " -pdb %s" % si['pluggable']
       print s
 
