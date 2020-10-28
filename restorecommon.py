@@ -129,6 +129,8 @@ class RestoreDB(object):
             'dbid': Configuration.get('dbid', self._configname),
             'instancenumber': Configuration.get('autorestoreinstancenumber', self._configname),
             'thread': Configuration.get('autorestorethread', self._configname),
+            'pga_size': Configuration.get('pga_size', 'autorestore'),
+            'sga_size': Configuration.get('sga_size', 'autorestore'),
             'backupfinishedtime': dbconfig.get('dbparams','backup-finished'),
             'bctfile': self._dbparams['bctfile'],
             'autorestoredestination': self._restoredest,
