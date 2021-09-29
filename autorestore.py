@@ -184,7 +184,7 @@ def runrestore(database):
 # UI
 
 def loopdatabases():
-    excludelist = ['generic','rman','zfssa','autorestore','netapp']
+    excludelist = ['generic','rman','zfssa','autorestore','netapp','huaweidorado']
     sections = Configuration.sections()
     if action is not None:
         if action[0] == "!":
