@@ -31,7 +31,7 @@ scriptpath = scriptpath()
 
 # Read configuration
 configsection = sys.argv[1]
-Configuration.init(configsection)
+Configuration.init(configsection, additionaldefaults={'primarytns': configsection})
 
 # Database specific configuration
 backupdest = os.path.join(Configuration.get('backupdest', 'generic'), configsection)
@@ -89,7 +89,9 @@ def exec_rman(rmanscript):
     oraexec.rman(finalscript)
 
 # Execute sqlplus with a given script
-def exec_sqlplus(sqlplusscript, silent=False, header=True):
+def exec_sqlplus(sqlplusscript, silent=False, header=True, primary=False):
+    global configsection
+    Configuration.substitutions['sqlplusconnection'] = '/@%s as sysdba' % (Configuration.get('primarytns') if primary else configsection)
     script = ""
     if header:
         script+= "%s\n" % rmantemplateconfig.get('sqlplusheader')
@@ -173,7 +175,7 @@ def imagecopywithsnap():
     backup_missing_archlog()
     #
     info("Switch current log")
-    output = exec_sqlplus(rmantemplateconfig.get('archivecurrentlogs'), silent=True)
+    output = exec_sqlplus(rmantemplateconfig.get('archivecurrentlogs'), silent=True, primary=True)
     if os.path.isfile(restoreparamfile):
         with open(restoreparamfile, 'a') as f:
             for line in output.splitlines():
@@ -194,7 +196,7 @@ def imagecopywithsnap():
     #
     info("Refresh imagecopy")
     backup('imagecopy')
-    exec_sqlplus(rmantemplateconfig.get('archivecurrentlogs'))
+    exec_sqlplus(rmantemplateconfig.get('archivecurrentlogs'), primary=True)
     #
     if dosnapshot:
         info("Clean expired snapshots")
