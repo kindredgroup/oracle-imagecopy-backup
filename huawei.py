@@ -241,7 +241,19 @@ class HuaweiDorado(SnapHandler):
     def createvolume(self):
         # Create clone
         r,j = self._http.post("filesystem",
-            payload={'NAME': self._filesystem, 'vstoreId': self._vstoreid(), 'CAPACITY': 10000000, 'SECTORSIZE': 8192, 'ENABLECOMPRESSION': 'true', 'unixPermissions': '770', 'ISSHOWSNAPDIR': 'false' })
+            payload={
+                'NAME': self._filesystem
+                , 'vstoreId': self._vstoreid()
+                , 'CAPACITY': 1000000000
+                , 'SECTORSIZE': 8192
+                , 'ENABLECOMPRESSION': 'true'
+                , 'unixPermissions': '770'
+                , 'ISSHOWSNAPDIR': 'false'
+                , 'PARENTID': '0'
+                , 'AUTODELSNAPSHOTENABLE': 'false'
+                , 'ENABLEDEDUP': 'true'
+                , 'COMPRESSION': '1'
+            })
         clone_fs_id = j['data']['ID']
         # Create NFS share
         r,j = self._http.post("NFSHARE",
