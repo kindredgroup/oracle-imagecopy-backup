@@ -60,7 +60,7 @@ class Configuration:
                  'dosnapshot': 'true', 'gimanaged': 'true',
                  'schedulebackup': 'FREQ=DAILY', 'schedulearchlog': 'FREQ=HOURLY;INTERVAL=6',
                  'snapexpirationmonths': 0, 'backupjobenabled': 'true', 'sectionsize': '',
-                 'pga_size': '1G', 'sga_size': '2G'}
+                 'pga_size': '1G', 'sga_size': '2G', 'backupdestshared': 'true'}
 
     @classmethod
     def getconfigname(cls):

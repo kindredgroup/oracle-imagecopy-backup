@@ -34,7 +34,10 @@ configsection = sys.argv[1]
 Configuration.init(configsection, additionaldefaults={'primarytns': configsection})
 
 # Database specific configuration
-backupdest = os.path.join(Configuration.get('backupdest', 'generic'), configsection)
+if Configuration.get('backupdestshared', 'generic').upper() == 'TRUE':
+    backupdest = os.path.join(Configuration.get('backupdest', 'generic'), configsection)
+else:
+    backupdest = Configuration.get('backupdest', 'generic')
 archdir = os.path.join(backupdest, 'archivelog')
 hasdataguard = Configuration.get('hasdataguard').upper() == 'TRUE'
 dosnapshot = Configuration.get('dosnapshot').upper() == 'TRUE'
